@@ -1,0 +1,11 @@
+__init__.py
+*.pyc
+.*.swp
+.#*
+#*#
+*~
+plot/
+*.root
+*.d
+*.so
+*.pcm
