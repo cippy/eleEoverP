@@ -137,7 +137,8 @@ void getEoP_templateMC(TH1F *hinput = NULL, const string& dirName = "") {
     exit(EXIT_FAILURE);
   }
 
-  //  f->Close();
+  // do NOT close the file, or hinput is lost 
+  //  f->Close();  
 
 }
 
@@ -975,7 +976,9 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
 //==========================================================================================
 
 
-void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const string& xAxisName, const string& yAxisName, const string& canvasName, const string &dirName) {
+void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const string& xAxisName, const string& yAxisName, const string& canvasName, const string &dirName, const string &canvasTitle = "") {
+
+  string hOriginalTitle = "";
 
   TCanvas *cfit = new TCanvas("cfit","",700,700);
 
@@ -995,6 +998,8 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
   hdata->SetStats(0);
   hdata->SetLineColor(kRed);
   hdata->Draw("HE");
+  hOriginalTitle = string(hdata->GetTitle());
+  hdata->SetTitle(canvasTitle.c_str());
   hdata->GetXaxis()->SetLabelSize(0.45);
   hdata->GetYaxis()->SetTitle(yAxisName.c_str());
   hdata->GetYaxis()->SetTitleSize(0.06);
@@ -1059,12 +1064,18 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
 
   delete cfit;
 
+  hdata->SetTitle(hOriginalTitle.c_str());
+
 }
 
 //==========================================================================================
 
 
-void drawPlotOnlyMC(vector<TH1F*> &hmcVector, const vector<string> &legEntryName, const string& MCSampleName, const string& xAxisName, const string& yAxisName, const string& canvasName, const string &dirName) {
+void drawPlotOnlyMC(vector<TH1F*> &hmcVector, const vector<string> &legEntryName, const string& MCSampleName, const string& xAxisName, const string& yAxisName, const string& canvasName, const string &dirName, const string &canvasTitle = "") {
+
+  // to draw the canvas title in the frame, we actually use TH1::GetTitle, setting it to canvasTitle argument passed to this function.
+  // after saving the canvas, we set the histogram title to its original value
+  string hOriginalTitle = "";
 
   TCanvas *cfitMC = new TCanvas("cfitMC","");
 
@@ -1106,6 +1117,8 @@ void drawPlotOnlyMC(vector<TH1F*> &hmcVector, const vector<string> &legEntryName
       hmcVector[i]->SetMinimum(minimumYaxisValue * 0.98);  // slightly decrease the y scale for minimum
       if (hmcVector[i]->GetMinimum() < 0.02) hmcVector[i]->SetMinimum(0.0);
       hmcVector[i]->Draw("HE");
+      hOriginalTitle = string(hmcVector[i]->GetTitle());
+      hmcVector[i]->SetTitle(canvasTitle.c_str());
       hmcVector[i]->GetXaxis()->SetTitle(xAxisName.c_str());
       hmcVector[i]->GetXaxis()->SetLabelSize(0.05);
       hmcVector[i]->GetXaxis()->SetTitleSize(0.06);
@@ -1160,12 +1173,19 @@ void drawPlotOnlyMC(vector<TH1F*> &hmcVector, const vector<string> &legEntryName
 
   delete cfitMC;
 
+  hmcVector[0]->SetTitle(hOriginalTitle.c_str());  // reset the title of the histogram used to draw the canvas title (it was set in this function)
+
+
 }
 
 //=================================================================================
 
 void plotFromFit(const string &dataSampleName, const string &MCSampleName, const vector<Float_t> &corrEnergybinEdges, const string & dirName) {
   
+  string xAxisName = "";
+  if (USE_E) xAxisName = "corrected E [GeV]";
+  else xAxisName = "corrected E_{T} [GeV]";
+
   Int_t nCorrEnergyBins = corrEnergybinEdges.size() -1;
 
   TH1F* hPeakEoverPdata = new TH1F("hPeakEoverPdata","",nCorrEnergyBins,corrEnergybinEdges.data());
@@ -1185,25 +1205,21 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
     hPeakEoverPdata_templateFit->Add(hPeakEoverPmc,hPeakShift_MCdata,1.0,-1.0);  // data = MC - ("MC-Data")
   }
 
-  if (USE_E) {
-    drawPlotDataMC(hPeakEoverPdata, hPeakEoverPmc, MCSampleName, "corrected E [GeV]", "peak(E/P)", "modeEoverPfromFit",dirName);
-    if (hPeakEoverPdata_templateFit) drawPlotDataMC(hPeakEoverPdata_templateFit, hPeakEoverPmc, MCSampleName, "corrected E [GeV]", "peak(E/P)", "modeEoverPfromTemplateFit",dirName);
-    drawPlotDataMC(hSigmaEoverPdata, hSigmaEoverPmc, MCSampleName, "corrected E [GeV]", "#sigma(E/P)", "sigmaEoverPfromFit",dirName);
-  } else {
-    drawPlotDataMC(hPeakEoverPdata, hPeakEoverPmc, MCSampleName, "corrected E_{T} [GeV]", "peak(E/P)", "modeEoverPfromFit",dirName);
-    if (hPeakEoverPdata_templateFit) drawPlotDataMC(hPeakEoverPdata_templateFit, hPeakEoverPmc, MCSampleName, "corrected E_{T} [GeV]", "peak(E/P)", "modeEoverPfromTemplateFit",dirName);
-    drawPlotDataMC(hSigmaEoverPdata, hSigmaEoverPmc, MCSampleName, "corrected E_{T} [GeV]", "#sigma(E/P)", "sigmaEoverPfromFit",dirName);
-  }
+  drawPlotDataMC(hPeakEoverPdata, hPeakEoverPmc, MCSampleName, xAxisName, "peak(E/P) from fit", "modeEoverPfromFit",dirName,"fit with Crystal Ball");
+  if (hPeakEoverPdata_templateFit) drawPlotDataMC(hPeakEoverPdata_templateFit, hPeakEoverPmc, MCSampleName, xAxisName, "peak(E/P) from fit", "modeEoverPfromTemplateFit",dirName,"fit with template (data) and Crystal Ball (MC)");
+  drawPlotDataMC(hSigmaEoverPdata, hSigmaEoverPmc, MCSampleName, xAxisName, "#sigma(E/P) from fit", "sigmaEoverPfromFit",dirName,"fit with Crystal Ball");
+  
 
   // quick plot of the shift between data and MC peak, as obtained from fit of data distribution with MC template
 
-  TCanvas *cshift = new TCanvas("cshift","");
   if (hPeakShift_MCdata) {
+
+    TCanvas *cshift = new TCanvas("cshift","");
+    hPeakShift_MCdata->SetTitle("peak shift (MC - DATA) from template fit");
     hPeakShift_MCdata->SetStats(0);
     hPeakShift_MCdata->Draw("HE");
-    if (USE_E) hPeakShift_MCdata->GetXaxis()->SetTitle("corrected E [GeV]");
-    else hPeakShift_MCdata->GetXaxis()->SetTitle("corrected E_{T} [GeV]");
-    hPeakShift_MCdata->GetYaxis()->SetTitle("peak shift (MC - DATA) from template fit");
+    hPeakShift_MCdata->GetXaxis()->SetTitle(xAxisName.c_str());
+    hPeakShift_MCdata->GetYaxis()->SetTitle("peak shift");
     hPeakShift_MCdata->GetXaxis()->SetLabelSize(0.05);
     hPeakShift_MCdata->GetXaxis()->SetTitleSize(0.06);
     hPeakShift_MCdata->GetXaxis()->SetTitleOffset(0.8);
@@ -1211,8 +1227,9 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
     hPeakShift_MCdata->GetYaxis()->SetTitleOffset(1.1);
     cshift->SaveAs((dirName + "EoverP_peakShift_MCdata.png").c_str());
     cshift->SaveAs((dirName + "EoverP_peakShift_MCdata.pdf").c_str());
+    delete cshift;  
+  
   }
-  delete cshift;  
 
   // MC only study
 
@@ -1242,14 +1259,8 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
   legEntryName.push_back("E_{raw}/E_{true}");
   legEntryName.push_back("P_{track}/E_{true}");
 
-  if (USE_E) {
-    drawPlotOnlyMC(hPeakVectorMC, legEntryName, MCSampleName, "corrected E [GeV]", "peak position", "modeMCstudy",dirName); 
-    drawPlotOnlyMC(hSigmaVectorMC, legEntryName, MCSampleName, "corrected E [GeV]", "#sigma of distribution", "sigmaMCstudy",dirName); 
-  } else {
-    drawPlotOnlyMC(hPeakVectorMC, legEntryName, MCSampleName, "corrected E_{T} [GeV]", "peak position", "modeMCstudy",dirName); 
-    drawPlotOnlyMC(hSigmaVectorMC, legEntryName, MCSampleName, "corrected E_{T} [GeV]", "#sigma of distribution", "sigmaMCstudy",dirName); 
-  }
-
+  drawPlotOnlyMC(hPeakVectorMC, legEntryName, MCSampleName, xAxisName, "peak position from fit", "modeMCstudy",dirName,"fit with Crystall Ball"); 
+  drawPlotOnlyMC(hSigmaVectorMC, legEntryName, MCSampleName, xAxisName, "#sigma of distribution from fit", "sigmaMCstudy",dirName, "fit with Crystall Ball"); 
 
 }
 
