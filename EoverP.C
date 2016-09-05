@@ -52,7 +52,7 @@
 #define SKIM_1LEP1JET_80X 1
 #define FIT_2SIDE_CB 0      // 0 for single tail Crystal Ball for the fit, 1 for double tail
 #define SET_SCALE_ON_Y 0    // select default or user defined ranges for y axis
-#define USE_E 0 // 0 for ET and 1 for E in the binning
+#define USE_E 1 // 0 for ET and 1 for E in the binning
 
 using namespace std;
 
@@ -634,7 +634,9 @@ void getTexMCSampleName(const string &MCSampleName, string &texMCSampleName) {
 
 }
 
-void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnergybinEdges, TH1F* hPeak, TH1F* hSigma, const string &hNameID, const string &dirName, TH1F* hPeakShift_MCdata = NULL) {
+void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnergybinEdges, TH1F* hPeak, TH1F* hSigma, const string &hNameID, const string &dirName, TH1F* hPeakMeanInRange = NULL, const Double_t lowRangeValue = 0.0, const Double_t upRangeValue = 2.0, TH1F* hPeakShift_MCdata = NULL) {
+
+  cout << endl;
 
   TH1::SetDefaultSumw2(); //all the following histograms will automatically call TH1::Sumw2() 
   TVirtualFitter::SetDefaultFitter("Minuit");
@@ -942,6 +944,14 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
       hPeak->SetBinContent(i+1, frp1->Parameter(2)); // 2 is mu (starts with alpha, which is parameter number 0)  
       hPeak->SetBinError(i+1, frp1->ParError(2)); // 2 is mu (starts with alpha, which is parameter number 0)  
     }
+    if (hPeakMeanInRange != NULL) {
+      // Clone the histogram and set its range so that TH1F::GetMean() computes the mean in that range
+      TH1F* hCloneForMeanInRange = (TH1F*) hist->Clone();
+      TAxis* axisForMeanInRange = (TAxis*) hCloneForMeanInRange->GetXaxis();
+      axisForMeanInRange->SetRange(axisForMeanInRange->FindFixBin(lowRangeValue),axisForMeanInRange->FindFixBin(upRangeValue));
+      hPeakMeanInRange->SetBinContent(i+1, hCloneForMeanInRange->GetMean());
+      hPeakMeanInRange->SetBinError(i+1, hCloneForMeanInRange->GetMeanError());
+    }
     if (hPeakShift_MCdata  != NULL) {
       hPeakShift_MCdata ->SetBinContent(i+1, frp_template->Parameter(2)); // 2 is deltaX 
       hPeakShift_MCdata ->SetBinError(i+1, frp_template->ParError(2)); // 2 is deltaX 
@@ -970,6 +980,8 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
   //cout << "CHECK 3" << endl;
   //delete hist;  // if I delete hist I get segmentation fault (it didn't happen before trying to fit with template)
   //cout << "CHECK 4" << endl;
+  
+  cout << endl;
 
 }
 
@@ -1195,8 +1207,18 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
 
   TH1F* hPeakShift_MCdata = new TH1F("hPeakShift_MCdata","",nCorrEnergyBins,corrEnergybinEdges.data()); 
 
-  plotDistribution(dataSampleName, corrEnergybinEdges, hPeakEoverPdata, hSigmaEoverPdata, "EoverP",dirName, hPeakShift_MCdata);
-  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakEoverPmc, hSigmaEoverPmc, "EoverP",dirName);
+  // valuse used to define the range when getting peak position from TH1::GetMean()
+  double_t lowRangeValueForMean = 0.8; 
+  Double_t upRangeValueForMean = 1.2; 
+  string titleForPlotsWithMeanInRange = string(Form("peak from TH1F::GetMean() in [%1.1f, %1.1f]",lowRangeValueForMean,upRangeValueForMean));
+
+  TH1F* hPeakEoverPdata_meanInRange = new TH1F("hPeakEoverPdata_meanInRange","",nCorrEnergyBins,corrEnergybinEdges.data());
+  TH1F* hPeakEoverPmc_meanInRange = new TH1F("hPeakEoverPmc_meanInRange","",nCorrEnergyBins,corrEnergybinEdges.data());
+
+  plotDistribution(dataSampleName, corrEnergybinEdges, hPeakEoverPdata, hSigmaEoverPdata, "EoverP",dirName, 
+		   hPeakEoverPdata_meanInRange,lowRangeValueForMean, upRangeValueForMean, hPeakShift_MCdata);
+  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakEoverPmc, hSigmaEoverPmc, "EoverP",dirName,
+		   hPeakEoverPmc_meanInRange,lowRangeValueForMean, upRangeValueForMean);
 
   TH1F* hPeakEoverPdata_templateFit = NULL;
   if (hPeakShift_MCdata) hPeakEoverPdata_templateFit = new TH1F("hPeakEoverPdata_templateFit","",nCorrEnergyBins,corrEnergybinEdges.data());
@@ -1206,9 +1228,13 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
   }
 
   drawPlotDataMC(hPeakEoverPdata, hPeakEoverPmc, MCSampleName, xAxisName, "peak(E/P) from fit", "modeEoverPfromFit",dirName,"fit with Crystal Ball");
-  if (hPeakEoverPdata_templateFit) drawPlotDataMC(hPeakEoverPdata_templateFit, hPeakEoverPmc, MCSampleName, xAxisName, "peak(E/P) from fit", "modeEoverPfromTemplateFit",dirName,"fit with template (data) and Crystal Ball (MC)");
+  if (hPeakEoverPdata_templateFit) drawPlotDataMC(hPeakEoverPdata_templateFit, hPeakEoverPmc, MCSampleName, xAxisName, "peak(E/P) from fit", 
+						  "modeEoverPfromTemplateFit",dirName,"fit with template (data) and Crystal Ball (MC)");
   drawPlotDataMC(hSigmaEoverPdata, hSigmaEoverPmc, MCSampleName, xAxisName, "#sigma(E/P) from fit", "sigmaEoverPfromFit",dirName,"fit with Crystal Ball");
-  
+  if ( (hPeakEoverPdata_meanInRange != NULL) && (hPeakEoverPmc_meanInRange != NULL) ) {
+    drawPlotDataMC(hPeakEoverPdata_meanInRange, hPeakEoverPmc_meanInRange, MCSampleName, xAxisName, "peak(E/P)", "modeEoverP_usingMean",dirName,
+		   titleForPlotsWithMeanInRange);
+  }
 
   // quick plot of the shift between data and MC peak, as obtained from fit of data distribution with MC template
 
@@ -1219,7 +1245,7 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
     hPeakShift_MCdata->SetStats(0);
     hPeakShift_MCdata->Draw("HE");
     hPeakShift_MCdata->GetXaxis()->SetTitle(xAxisName.c_str());
-    hPeakShift_MCdata->GetYaxis()->SetTitle("peak shift");
+    hPeakShift_MCdata->GetYaxis()->SetTitle("peak(E/P) shift");
     hPeakShift_MCdata->GetXaxis()->SetLabelSize(0.05);
     hPeakShift_MCdata->GetXaxis()->SetTitleSize(0.06);
     hPeakShift_MCdata->GetXaxis()->SetTitleOffset(0.8);
@@ -1240,9 +1266,16 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
   TH1F* hPeakPtrackOverEtrue = new TH1F("hPeakPtrackOverEtrue","",nCorrEnergyBins,corrEnergybinEdges.data());
   TH1F* hSigmaPtrackOverEtrue = new TH1F("hSigmaPtrackOverEtrue","",nCorrEnergyBins,corrEnergybinEdges.data());
 
-  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakEcorrOverEtrue, hSigmaEcorrOverEtrue, "EcorrOverEtrue",dirName);
-  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakErawOverEtrue, hSigmaErawOverEtrue, "ErawOverEtrue",dirName);
-  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakPtrackOverEtrue, hSigmaPtrackOverEtrue, "PtrackOverEtrue",dirName);    
+  TH1F* hPeakEcorrOverEtrue_meanInRange = new TH1F("hPeakEcorrOverEtrue_meanInRange","",nCorrEnergyBins,corrEnergybinEdges.data());
+  TH1F* hPeakErawOverEtrue_meanInRange = new TH1F("hPeakErawOverEtrue_meanInRange","",nCorrEnergyBins,corrEnergybinEdges.data());
+  TH1F* hPeakPtrackOverEtrue_meanInRange = new TH1F("hPeakPtrackOverEtrue_meanInRange","",nCorrEnergyBins,corrEnergybinEdges.data());
+
+  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakEcorrOverEtrue, hSigmaEcorrOverEtrue, "EcorrOverEtrue",dirName, 
+		   hPeakEcorrOverEtrue_meanInRange,lowRangeValueForMean, upRangeValueForMean);
+  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakErawOverEtrue, hSigmaErawOverEtrue, "ErawOverEtrue",dirName, 
+		   hPeakErawOverEtrue_meanInRange,lowRangeValueForMean, upRangeValueForMean);
+  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakPtrackOverEtrue, hSigmaPtrackOverEtrue, "PtrackOverEtrue",dirName, 
+		   hPeakPtrackOverEtrue_meanInRange,lowRangeValueForMean, upRangeValueForMean);
 
   vector<TH1F*> hPeakVectorMC;
   hPeakVectorMC.push_back(hPeakEcorrOverEtrue);
@@ -1254,6 +1287,11 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
   hSigmaVectorMC.push_back(hSigmaErawOverEtrue);
   hSigmaVectorMC.push_back(hSigmaPtrackOverEtrue);
 
+  vector<TH1F*> hPeakVectorMC_meanInRange;
+  hPeakVectorMC_meanInRange.push_back(hPeakEcorrOverEtrue_meanInRange);
+  hPeakVectorMC_meanInRange.push_back(hPeakErawOverEtrue_meanInRange);
+  hPeakVectorMC_meanInRange.push_back(hPeakPtrackOverEtrue_meanInRange);
+
   vector<string> legEntryName;
   legEntryName.push_back("E_{corr}/E_{true}");
   legEntryName.push_back("E_{raw}/E_{true}");
@@ -1261,6 +1299,9 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
 
   drawPlotOnlyMC(hPeakVectorMC, legEntryName, MCSampleName, xAxisName, "peak position from fit", "modeMCstudy",dirName,"fit with Crystall Ball"); 
   drawPlotOnlyMC(hSigmaVectorMC, legEntryName, MCSampleName, xAxisName, "#sigma of distribution from fit", "sigmaMCstudy",dirName, "fit with Crystall Ball"); 
+
+  drawPlotOnlyMC(hPeakVectorMC_meanInRange, legEntryName, MCSampleName, xAxisName, "peak position", "peakMCstudy_usingMean",dirName,
+		 titleForPlotsWithMeanInRange); 
 
 }
 
