@@ -278,7 +278,11 @@ void buildChainWithFriend(TChain* chain, TChain* chFriend, string sampleName) {
       if (SKIM_1LEP1JET_80X) {
 	subSampleNameVector.push_back("SingleElectron_Run2016B_PromptReco_v1_runs_272023_273146");
 	subSampleNameVector.push_back("SingleElectron_Run2016B_PromptReco_v2_runs_273150_275376");
-	subSampleNameVector.push_back("SingleElectron_Run2016C_PromptReco_v2_runs_275420_276097");
+	subSampleNameVector.push_back("SingleElectron_Run2016C_PromptReco_v2_runs_275420_276283");
+	subSampleNameVector.push_back("SingleElectron_Run2016D_PromptReco_v2_runs_276315_276811");
+	subSampleNameVector.push_back("SingleElectron_Run2016E_PromptReco_v2_runs_276830_277420");
+	subSampleNameVector.push_back("SingleElectron_Run2016F_PromptReco_v1_runs_277820_278808");
+	subSampleNameVector.push_back("SingleElectron_Run2016G_PromptReco_v1_runs_278817_279931");	
       } else {
 	subSampleNameVector.push_back("SingleElectron_PromptReco_v1_runs_272021_273149");
 	subSampleNameVector.push_back("SingleElectron_PromptReco_v2_runs_273150_274443");
@@ -321,7 +325,7 @@ void buildChainWithFriend(TChain* chain, TChain* chFriend, string sampleName) {
 
   //2016 trees
   string treePath = "";
-  if (SKIM_1LEP1JET_80X) treePath = "root://eoscms//eos/cms/store/cmst3/group/susy/emanuele/monox/trees/TREES_1LEP1JET_80X/"; // 2016 trees with skim 1 lep1jet
+  if (SKIM_1LEP1JET_80X) treePath = "root://eoscms//eos/cms/store/group/phys_exotica/monojet/mciprian/trees_80X/TREES_1TLEP1JET_80X_4EoP/"; // 2016 trees with skim 1 lep1jet
   else {
     if (DATA2016) treePath = "root://eoscms//eos/cms/store/cmst3/group/susy/emanuele/monox/trees/TREES_1LEPSKIM_80X/"; // 2016 trees
     else treePath = "root://eoscms//eos/cms/store/cmst3/group/susy/emanuele/monox/trees/TREES_25ns_1LEPSKIM_76X/";   //2015 trees
@@ -399,8 +403,11 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
    fChain->SetBranchStatus("LepGood_correctedEcalEnergy",1);
    fChain->SetBranchStatus("LepGood_superCluster_rawEnergy",1);
    fChain->SetBranchStatus("LepGood_eSuperClusterOverP",1);
-   fChain->SetBranchStatus("LepGood_r9",1);
+   fChain->SetBranchStatus("LepGood_full5x5_r9",1);
    fChain->SetBranchStatus("met_pt",1);
+
+   // for additional studies
+   fChain->SetBranchStatus("LepGood_full5x5_sigmaIetaIeta",1);
 
    // branches for MC study
    if (sampleName != "DATA"){
@@ -451,6 +458,14 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
    vector<TH1F*> hErawOverEtrue_corrEnergyBin(nCorrEnergyBins,NULL);
    vector<TH1F*> hPtrackOverEtrue_corrEnergyBin(nCorrEnergyBins,NULL);
 
+   // for additional studies
+   TH1F* hSigmaIetaIeta_lowE = new TH1F("hSigmaIetaIeta_lowE","",96,0.0,0.012);
+   TH1F* hSigmaIetaIeta_hotE = new TH1F("hSigmaIetaIeta_hotE","",96,0.0,0.012);
+   TH1F* hR9_lowE = new TH1F("hR9_lowE","",90,0.2,1.1);
+   TH1F* hR9_hotE = new TH1F("hR9_hotE","",90,0.2,1.1);
+   TH1F* hPt_lowE = new TH1F("hPt_lowE","",140,0.0,700.0);
+   TH1F* hPt_hotE = new TH1F("hPt_hotE","",140,0.0,700.0);   
+
    for (Int_t i = 0; i < nCorrEnergyBins; i++) {
      hEoverP_corrEnergyBin[i] = new TH1F(Form("hEoverP_corrEnergyBin%1.0fTo%1.0f",corrEnergybinEdges[i],corrEnergybinEdges[i+1]),"",200,0.05,2.05);
    }
@@ -488,8 +503,33 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
       if (jentry%500000 == 0) cout << jentry << endl;
   
       if (met_pt < 50) continue;
-      if (!(nEle10V == 1 && nEle40T == 1)) continue;
-      if (!(fabs(LepGood_pdgId[0]) == 11 && LepGood_pt[0] > 40 && fabs(LepGood_eta[0]) < 1.0 && LepGood_r9[0] > 0.94)) continue;
+      if (!( nEle10V == 1 && nEle40T == 1) ) continue;
+      if ( !( fabs(LepGood_pdgId[0]) == 11 && LepGood_pt[0] > 40 && fabs(LepGood_eta[0]) < 1.0) ) continue;
+
+      Double_t energyToUse = LepGood_correctedEcalEnergy[0];
+      if (!USE_E) {
+	Double_t theta = 2. * atan(exp(-LepGood_eta[0])); 
+	energyToUse *= sin(theta);
+      } 
+
+      // fill these before cutting on r9
+      if (energyToUse > 99.9 && energyToUse < 225.0) {
+	hR9_lowE->Fill(LepGood_full5x5_r9[0]);
+      } else if (energyToUse > 349.9 && energyToUse < 450.0) {
+	hR9_hotE->Fill(LepGood_full5x5_r9[0]);
+      }
+
+      if (!(LepGood_full5x5_r9[0] > 0.94)) continue;
+
+      if (energyToUse > 99.9 && energyToUse < 225.0) {
+	hSigmaIetaIeta_lowE->Fill(LepGood_full5x5_sigmaIetaIeta[0]);
+	hPt_lowE->Fill(LepGood_pt[0]);
+      } else if (energyToUse > 349.9 && energyToUse < 450.0) {
+	hSigmaIetaIeta_hotE->Fill(LepGood_full5x5_sigmaIetaIeta[0]);
+	hPt_hotE->Fill(LepGood_pt[0]);
+      }
+
+
       //if (!(fabs(LepGood_pdgId[0]) == 11 && LepGood_pt[0] > 40 && fabs(LepGood_eta[0]) > 1.0 && fabs(LepGood_eta[0]) < 1.479)) continue;
 
       // here goes with the algorithm to match gen to reco electrons and in case fill histograms
@@ -531,16 +571,10 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
 
       // end of loop to match gen and reco electrons
 
-      Double_t energyToUse = LepGood_correctedEcalEnergy[0];
-      if (!USE_E) {
-	Double_t theta = 2. * atan(exp(-LepGood_eta[0])); 
-	energyToUse *= sin(theta);
-      } 
-
-      hEoP_template->Fill(LepGood_eSuperClusterOverP[0]);
-
       // look for the bin in the LepGood_correctedEcalEnergy variable      
       Int_t bin = getBinNumber(energyToUse,corrEnergybinEdges);  // this function returns negative value if bin not found
+
+      hEoP_template->Fill(LepGood_eSuperClusterOverP[0]);
 
       if (bin >= 0) {
 
@@ -627,6 +661,8 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
 
 }
 
+//=========================================================================
+
 void getTexMCSampleName(const string &MCSampleName, string &texMCSampleName) {
   
   if (MCSampleName == "WJetsToLNu") texMCSampleName = "W(l#nu)+jets";
@@ -634,7 +670,9 @@ void getTexMCSampleName(const string &MCSampleName, string &texMCSampleName) {
 
 }
 
-void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnergybinEdges, TH1F* hPeak, TH1F* hSigma, const string &hNameID, const string &dirName, TH1F* hPeakMeanInRange = NULL, const Double_t lowRangeValue = 0.0, const Double_t upRangeValue = 2.0, TH1F* hPeakShift_MCdata = NULL) {
+//=========================================================================
+
+void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnergybinEdges, TH1F* hPeak, TH1F* hSigma, const string &hNameID, const string &dirName, TH1F* hPeakMeanInRange = NULL, const Double_t lowRangeValue = 0.0, const Double_t upRangeValue = 2.0, TH1F* hPeakShift_MCdata = NULL, TH1F* hScaleFactor_MCdata = NULL) {
 
   cout << endl;
 
@@ -709,9 +747,12 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
 
   for (UInt_t i = 0; i < nBins; i++) {
 
+    cout << " Energy bin: [" << corrEnergybinEdges[i] << ", " << corrEnergybinEdges[i+1] << "]" << endl;
+
     htmp = (TH1F*)f->Get(Form("h%s_corrEnergyBin%1.0fTo%1.0f",hNameID.c_str(),corrEnergybinEdges[i],corrEnergybinEdges[i+1]));  
     if (!htmp) {
-      cout << "Error: histogram " << htmp->GetName() << " not found in file ' " << fileName << "'. End of programme." << endl;
+      cout << "Error: histogram " << Form("h%s_corrEnergyBin%1.0fTo%1.0f",hNameID.c_str(),corrEnergybinEdges[i],corrEnergybinEdges[i+1]) 
+	   << " not found in file ' " << fileName << "'. End of programme." << endl;
       exit(EXIT_FAILURE);
     }
     // now, if using data I will fit with template obtained from the same distribution in MC file. Since the histogram's name is the same in both file, I 
@@ -732,14 +773,16 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
       //else if (corrEnergybinEdges[i] > 199.9) hist->Rebin(2); // when using E instead of Et 249.9 is ok
     } else if (hNameID != "EoverP") {
       if (hNameID == "PtrackOverEtrue") {
-	if (corrEnergybinEdges[i] > 449.9) hist->Rebin(4); 
-	else if (corrEnergybinEdges[i] > 349.9) hist->Rebin(3); 
+	if (corrEnergybinEdges[i] > 449.9) hist->Rebin(5); 
+	else if (corrEnergybinEdges[i] > 349.9) hist->Rebin(4); 
+	else if (corrEnergybinEdges[i] > 274.9) hist->Rebin(3); 
 	else if (corrEnergybinEdges[i] > 174.9) hist->Rebin(2); 
       } else {
 	hist->GetXaxis()->SetRangeUser(0.85,1.15);
       }
     } else {
-      if (corrEnergybinEdges[i] > 449.9) hist->Rebin(3); 
+      if (corrEnergybinEdges[i] > 549.9) hist->Rebin(4); 
+      else if (corrEnergybinEdges[i] > 349.9) hist->Rebin(3); 
       else if (corrEnergybinEdges[i] > 224.9) hist->Rebin(2);      
     }
     c->Update();
@@ -748,17 +791,26 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
     // do a first fit with a simple gaussian in the core
     Double_t gaussEdgeL = 0.9;  //left side of the gaussian to be used in the fit (I use a variable so that I change this value only once)
     Double_t gaussEdgeR = 1.1;  //right side ...
+    // some general settings
     if (corrEnergybinEdges[i] > 349.9) {
       gaussEdgeL = 0.75;
       gaussEdgeR = 1.25;
     }
-    if (sampleName != "DATA" && hNameID != "EoverP") {
-      if (hNameID == "PtrackOverEtrue") {
-	gaussEdgeL = 0.9;
-	gaussEdgeR = 1.1;
+    // if MC, use more specific settings (decided after looking at plots, there is no a priori reason for them)
+    if (sampleName != "DATA") {
+      if (hNameID != "EoverP") {
+	if (hNameID == "PtrackOverEtrue") {
+	  gaussEdgeL = 0.9;
+	  gaussEdgeR = 1.1;
+	} else {
+	  gaussEdgeL = 0.95;
+	  gaussEdgeR = 1.05;	
+	}
       } else {
-	gaussEdgeL = 0.95;
-	gaussEdgeR = 1.05;	
+	if (corrEnergybinEdges[i] > 349.9) {
+	  gaussEdgeL = 0.75;
+	  gaussEdgeR = 1.25;
+	}
       }
     }
     hist->Fit("gaus","E L I Q 0","",gaussEdgeL,gaussEdgeR);  // L: loglikelihood method, 0: do not plot this fit, Q: quiet mode (minimum printing)
@@ -867,7 +919,8 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
 	exit(EXIT_FAILURE);
       }	
       // rebinning if needed
-      if (corrEnergybinEdges[i] > 449.9) hEoP_template->Rebin(3); 
+      if (corrEnergybinEdges[i] > 449.9) hEoP_template->Rebin(4); 
+      else if (corrEnergybinEdges[i] > 274.9) hEoP_template->Rebin(3);      
       else if (corrEnergybinEdges[i] > 174.9) hEoP_template->Rebin(2);      
 
       // end of access of MC file to get templates
@@ -876,26 +929,48 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
       // class defining the template function
       histoFunc* templateHistoFunc = new histoFunc(hEoP_template); 
       //cout << "templateHistoFunc->GetIntegral() : " << templateHistoFunc->GetIntegral() << endl;
-      Double_t templateFitRangeLow = 0.6;  // 0.7
-      Double_t templateFitRangeUp = 2.0;   // 2.0 
+      Double_t templateFitRangeLow = 0.7;  // 0.7
+      Double_t templateFitRangeUp = 1.8;   // 2.0
+      if (corrEnergybinEdges[i] > 274.9) {
+	templateFitRangeLow = 0.75;
+	templateFitRangeUp = 1.8; 
+      }
+      
       f_EoP_template = new TF1("f_EoP_template", templateHistoFunc, templateFitRangeLow, templateFitRangeUp, 3, "histoFunc");
       f_EoP_template -> SetParName(0,"Norm"); 
       f_EoP_template -> SetParName(1,"Scale factor");
       f_EoP_template -> SetParName(2,"Shift of x"); 
       //      f_EoP_template -> SetLineWidth(1); 
-      f_EoP_template -> SetNpx(10000);
+      f_EoP_template -> SetNpx(5000);  // granularity of template fit (template shuld be as smooth as possible, so either change this or rebin the MC histogram)
       //Double_t xNorm = histClone->GetEntries()/hEoP_template->GetEntries() * histClone->GetBinWidth(1)/hEoP_template->GetBinWidth(1); // GetEntries includes under/overflow
-      Double_t xNorm = histClone->Integral(getLowBinGivenRange(histClone,templateFitRangeLow),getUpBinGivenRange(histClone,templateFitRangeUp)) /
-	hEoP_template->Integral(getLowBinGivenRange(hEoP_template,templateFitRangeLow),getUpBinGivenRange(hEoP_template,templateFitRangeUp)) * 
-	histClone->GetBinWidth(1)/hEoP_template->GetBinWidth(1); 
+
+      //// PAR 0 /////
+      Double_t xNorm = 0.0;
+      // xnorm = (histClone->Integral(getLowBinGivenRange(histClone,templateFitRangeLow),getUpBinGivenRange(histClone,templateFitRangeUp)) /
+      // 	       hEoP_template->Integral(getLowBinGivenRange(hEoP_template,templateFitRangeLow),getUpBinGivenRange(hEoP_template,templateFitRangeUp))) * 
+      // 	( histClone->GetBinWidth(1) / hEoP_template->GetBinWidth(1) ); 
+      xNorm = (histClone->Integral(getLowBinGivenRange(histClone,templateFitRangeLow),getUpBinGivenRange(histClone,templateFitRangeUp),"width") /
+	       hEoP_template->Integral(getLowBinGivenRange(hEoP_template,templateFitRangeLow),getUpBinGivenRange(hEoP_template,templateFitRangeUp),"width"));
       // f_EoP_template -> SetParameter(0, xNorm);
-      // f_EoP_template -> SetParLimits(0, 0.95 * xNorm, 1.05 * xNorm);
+      // f_EoP_template -> SetParLimits(0, 0.98 * xNorm, 1.02 * xNorm);
       f_EoP_template -> FixParameter(0, xNorm);
-      f_EoP_template -> SetParameter(1, 1.0);  // maybe this should be the inverse of the width ratio
-      f_EoP_template -> SetParLimits(1,0.1,10.0); 
-      Double_t MC_data_peakDeltaX = hEoP_template->GetBinCenter(hEoP_template->GetMaximumBin()) - frp1->Parameter(2);
-      f_EoP_template -> SetParameter(2, MC_data_peakDeltaX);  // will set this to Dx between peak in data and MC ( MC - data )
-      f_EoP_template -> SetParLimits(2, 0.1 * MC_data_peakDeltaX, 10.0 * MC_data_peakDeltaX);  // will set this to Dx between peak in data and MC ( MC - data )
+
+      //// PAR 1 /////      
+      f_EoP_template -> SetParameter(1, 0.9);  // maybe this should be the inverse of the width ratio
+      //f_EoP_template -> SetParLimits(1,0.1,10.0); 
+      f_EoP_template -> SetParLimits(1,0.8,1.1); 
+      
+      //// PAR 2 /////
+      // I think the shift should be negative: x --> x' = a (x - dx)
+      // This means the data are shifter toward left with respect to MC. Also, a is slightly less than 1, so that distribution is broader in data than in MC
+      // Suppose f(x) for MC is a gaussian centered in 0 and sigma = 1. Then, g(x') = g( a(x-dx) ) is a gaussian peaked in dx and with sigma = 1/a
+      
+      // Double_t MC_data_peakDeltaX = hEoP_template->GetBinCenter(hEoP_template->GetMaximumBin()) - frp1->Parameter(2);
+      // cout << "MC_data_peakDeltaX = " << MC_data_peakDeltaX << endl;
+      //f_EoP_template -> SetParameter(2, MC_data_peakDeltaX);  // will set this to Dx between peak in data and MC ( MC - data )
+      f_EoP_template -> SetParameter(2, - 0.05);  // will set this to Dx between peak in data and MC ( MC - data )
+      //f_EoP_template -> SetParLimits(2, 0.1 * MC_data_peakDeltaX, 10.0 * MC_data_peakDeltaX);  // will set this to Dx between peak in data and MC ( MC - data )
+      f_EoP_template -> SetParLimits(2, -0.5, 0.1);  
       //Double_t MC_data_peakDeltaX = 0.2;
       //f_EoP_template -> FixParameter(2, MC_data_peakDeltaX);  // will set this to Dx between peak in data and MC ( MC - data )
       f_EoP_template -> SetLineColor(kGreen+2);
@@ -952,6 +1027,10 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
       hPeakMeanInRange->SetBinContent(i+1, hCloneForMeanInRange->GetMean());
       hPeakMeanInRange->SetBinError(i+1, hCloneForMeanInRange->GetMeanError());
     }
+    if (hScaleFactor_MCdata  != NULL) {
+      hScaleFactor_MCdata ->SetBinContent(i+1, frp_template->Parameter(1)); // 1 is scale factor 
+      hScaleFactor_MCdata ->SetBinError(i+1, frp_template->ParError(1)); // 1 is scale factor
+    }
     if (hPeakShift_MCdata  != NULL) {
       hPeakShift_MCdata ->SetBinContent(i+1, frp_template->Parameter(2)); // 2 is deltaX 
       hPeakShift_MCdata ->SetBinError(i+1, frp_template->ParError(2)); // 2 is deltaX 
@@ -988,7 +1067,7 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
 //==========================================================================================
 
 
-void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const string& xAxisName, const string& yAxisName, const string& canvasName, const string &dirName, const string &canvasTitle = "") {
+void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const string& xAxisName, const string& yAxisName, const string& canvasName, const string &dirName, const string &canvasTitle = "", const string& hNameToTriggerOptions = "", const Int_t setLogy = 0) {
 
   string hOriginalTitle = "";
 
@@ -1006,7 +1085,23 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
   subpad_1->Draw();
   subpad_2->Draw();
   subpad_1->cd();
-  
+
+  Double_t maximumYaxisValue = -100000.0;
+  Double_t minimumYaxisValue = 100000.0;
+
+  Double_t value = hdata->GetBinContent(hdata->GetMaximumBin()) + hdata->GetBinError(hdata->GetMaximumBin()); 
+  if ( value > maximumYaxisValue) maximumYaxisValue = value; 
+  value =  hmc->GetBinContent(hmc->GetMaximumBin()) + hmc->GetBinError(hmc->GetMaximumBin());
+  if ( value > maximumYaxisValue) maximumYaxisValue = value;
+  value = hdata->GetBinContent(hdata->GetMinimumBin()) - hdata->GetBinError(hdata->GetMinimumBin());
+  if ( value < minimumYaxisValue) minimumYaxisValue = value;
+  value = hmc->GetBinContent(hmc->GetMinimumBin()) - hmc->GetBinError(hmc->GetMinimumBin());
+  if ( value < minimumYaxisValue) minimumYaxisValue = value;
+
+  if (setLogy != 0) {
+    if (minimumYaxisValue < 0.0000001) minimumYaxisValue = 0.00001; // if compatible with 0 or negative, set it to value close to but different from zero
+    subpad_1->SetLogy(); 
+  } 
   hdata->SetStats(0);
   hdata->SetLineColor(kRed);
   hdata->Draw("HE");
@@ -1016,6 +1111,18 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
   hdata->GetYaxis()->SetTitle(yAxisName.c_str());
   hdata->GetYaxis()->SetTitleSize(0.06);
   hdata->GetYaxis()->SetTitleOffset(0.8);
+  hdata->SetMinimum(minimumYaxisValue);
+  hdata->SetMaximum(maximumYaxisValue);
+  // string hdataName(hdata->GetName());
+  // if (hdataName == hNameToTriggerOptions) {
+  if (hNameToTriggerOptions == "hPeakEoverPdata_templateFit") {
+    hdata->SetMinimum(0.93);
+    hdata->SetMaximum(1.0);
+  } else if (hNameToTriggerOptions == "distributions") {
+    hdata->SetMinimum(0.0001);
+    hdata->SetMaximum(1.0);
+  }
+
   if (SET_SCALE_ON_Y) {
     if (yAxisName == "peak(E/P)") {
       hdata->SetMinimum(0.94);
@@ -1059,7 +1166,14 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
   ratioplot->GetYaxis()->SetNdivisions(011);
   ratioplot->SetMarkerStyle(8);  //medium dot  
   TH1F *ratioplotCopy = (TH1F*) ratioplot->DrawCopy("E");
-  //ratioplot->Draw("E");
+  //ratioplot->Draw("E");   
+  if (hNameToTriggerOptions == "hPeakEoverPdata_templateFit") {
+    ratioplotCopy->SetMinimum(0.93);
+    ratioplotCopy->SetMaximum(1.05);
+  } else if (hNameToTriggerOptions == "distributions") {
+    ratioplotCopy->SetMinimum(0.5);
+    ratioplotCopy->SetMaximum(1.5);
+  }
   if (SET_SCALE_ON_Y) {
     if (yAxisName == "peak(E/P)") {
       ratioplotCopy->SetMinimum(0.97);
@@ -1107,7 +1221,7 @@ void drawPlotOnlyMC(vector<TH1F*> &hmcVector, const vector<string> &legEntryName
   vector<Int_t> histColor;
   setHistColor(histColor,(Int_t)hmcVector.size());
   
-  Double_t maximumYaxisValue = 0.0;
+  Double_t maximumYaxisValue = -100000.0;
   Double_t minimumYaxisValue = 100000.0;
   
   for (UInt_t i = 0; i < hmcVector.size(); i++) {
@@ -1116,7 +1230,6 @@ void drawPlotOnlyMC(vector<TH1F*> &hmcVector, const vector<string> &legEntryName
     if ( value > maximumYaxisValue) maximumYaxisValue = value; 
     value = hmcVector[i]->GetBinContent(hmcVector[i]->GetMinimumBin()) - hmcVector[i]->GetBinError(hmcVector[i]->GetMinimumBin());
     if ( value < minimumYaxisValue) minimumYaxisValue = value;
-
 
   } 
 
@@ -1190,6 +1303,122 @@ void drawPlotOnlyMC(vector<TH1F*> &hmcVector, const vector<string> &legEntryName
 
 }
 
+//===========================================================================
+
+void  plotHistogramsFromFile(const string &dataSampleName, const string &MCSampleName, const string& dirName) { 
+
+  /*
+  void drawPlotDataMC(TH1F* hdata, 
+		      TH1F* hmc, 
+		      const string& MCSampleName, 
+		      const string& xAxisName, 
+		      const string& yAxisName, 
+		      const string& canvasName, 
+		      const string &dirName, 
+		      const string &canvasTitle = "", 
+		      const string& hNameToTriggerOptions = "") {
+  */
+
+  string fileNameData = dirName + "EoverP_" + dataSampleName + ".root";
+  string fileNameMC = dirName + "EoverP_" + MCSampleName + ".root";
+
+  TH1F* hvar = NULL;  // to get histogram from file
+  TH1F* hvar2 = NULL;  // to get histogram from file
+
+  vector<string> hNameList;
+  hNameList.push_back("hSigmaIetaIeta_lowE");
+  hNameList.push_back("hSigmaIetaIeta_hotE");
+  hNameList.push_back("hR9_lowE");
+  hNameList.push_back("hR9_hotE");
+  hNameList.push_back("hPt_lowE");
+  hNameList.push_back("hPt_hotE");
+  vector<string> xAxisName;
+  xAxisName.push_back("electron #sigma_{i#eta i#eta}");
+  xAxisName.push_back("electron #sigma_{i#eta i#eta}");
+  xAxisName.push_back("electron R9");
+  xAxisName.push_back("electron R9");
+  xAxisName.push_back("electron p_{T} [GeV]");
+  xAxisName.push_back("electron p_{T} [GeV]");
+  vector<string> canvasName;
+  canvasName.push_back("sigmaIetaIeta_lowE");
+  canvasName.push_back("sigmaIetaIeta_hotE");
+  canvasName.push_back("R9_lowE");
+  canvasName.push_back("R9_hotE");
+  canvasName.push_back("pT_lowE");
+  canvasName.push_back("pT_hotE");
+  vector<string> canvasTitle;
+  if (USE_E) {
+    canvasTitle.push_back("100 < E < 225 GeV");
+    canvasTitle.push_back("350 < E < 450 GeV");
+    canvasTitle.push_back("100 < E < 225 GeV");
+    canvasTitle.push_back("350 < E < 450 GeV");
+    canvasTitle.push_back("100 < E < 225 GeV");
+    canvasTitle.push_back("350 < E < 450 GeV");
+  } else {
+    canvasTitle.push_back("100 < E_{T} < 225 GeV");
+    canvasTitle.push_back("350 < E_{T} < 450 GeV");
+    canvasTitle.push_back("100 < E_{T} < 225 GeV");
+    canvasTitle.push_back("350 < E_{T} < 450 GeV");
+    canvasTitle.push_back("100 < E_{T} < 225 GeV");
+    canvasTitle.push_back("350 < E_{T} < 450 GeV");
+  }    
+
+  TH1F* hData = NULL;
+  TH1F* hMC = NULL;
+
+  TFile* fData = TFile::Open(fileNameData.c_str(),"READ");
+  if (!fData || !fData->IsOpen()) {
+    cout<<"*******************************"<<endl;
+    cout<<"Error opening file \""<<fileNameData<<"\".\nApplication will be terminated."<<endl;
+    cout<<"*******************************"<<endl;
+    exit(EXIT_FAILURE);
+  }
+  
+  TFile* fMC = TFile::Open(fileNameMC.c_str(),"READ");
+  if (!fMC || !fMC->IsOpen()) {
+    cout<<"*******************************"<<endl;
+    cout<<"Error opening file \""<<fileNameMC<<"\".\nApplication will be terminated."<<endl;
+    cout<<"*******************************"<<endl;
+    exit(EXIT_FAILURE);
+  }
+  
+  for (UInt_t i = 0; i < hNameList.size(); i++) {
+    
+    fData->cd();
+    // reading data file
+    hvar = (TH1F*)fData->Get(hNameList[i].c_str());
+    if (!hvar) {
+      cout << "Error: histogram not found in file ' " << fileNameData << "'. End of programme." << endl;
+      exit(EXIT_FAILURE);
+    }
+    hData = (TH1F*) hvar->Clone();
+
+    fMC->cd();
+    // reading MC file
+    hvar2 = (TH1F*)fMC->Get(hNameList[i].c_str());
+    if (!hvar2) {
+      cout << "Error: histogram not found in file ' " << fileNameMC << "'. End of programme." << endl;
+      exit(EXIT_FAILURE);
+    }
+    hMC = (TH1F*) hvar2->Clone();
+
+    /////////////////////////
+    // Now plotting
+    ////////////////////////
+    // to compare, normalize MC to same area
+    // since no weights are applied, I can use GetEntries() to get integral (this includes underflow and overflow events)
+    hData->Sumw2();
+    hData->Scale(1./hData->GetEntries());
+    hMC->Sumw2();
+    hMC->Scale(1./hMC->GetEntries());
+    drawPlotDataMC(hData, hMC, MCSampleName, xAxisName[i], "a.u.",canvasName[i],dirName,canvasTitle[i],"distributions",1);
+    //////////////////////////
+
+  }
+
+}
+
+
 //=================================================================================
 
 void plotFromFit(const string &dataSampleName, const string &MCSampleName, const vector<Float_t> &corrEnergybinEdges, const string & dirName) {
@@ -1206,6 +1435,7 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
   TH1F* hSigmaEoverPmc = new TH1F("hSigmaEoverPmc","",nCorrEnergyBins,corrEnergybinEdges.data());
 
   TH1F* hPeakShift_MCdata = new TH1F("hPeakShift_MCdata","",nCorrEnergyBins,corrEnergybinEdges.data()); 
+  TH1F* hScaleFactor_MCdata = new TH1F("hScaleFactor_MCdata","",nCorrEnergyBins,corrEnergybinEdges.data()); 
 
   // valuse used to define the range when getting peak position from TH1::GetMean()
   double_t lowRangeValueForMean = 0.8; 
@@ -1216,46 +1446,50 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
   TH1F* hPeakEoverPmc_meanInRange = new TH1F("hPeakEoverPmc_meanInRange","",nCorrEnergyBins,corrEnergybinEdges.data());
 
   plotDistribution(dataSampleName, corrEnergybinEdges, hPeakEoverPdata, hSigmaEoverPdata, "EoverP",dirName, 
-		   hPeakEoverPdata_meanInRange,lowRangeValueForMean, upRangeValueForMean, hPeakShift_MCdata);
+		   hPeakEoverPdata_meanInRange,lowRangeValueForMean, upRangeValueForMean, hPeakShift_MCdata, hScaleFactor_MCdata);
   plotDistribution(MCSampleName, corrEnergybinEdges, hPeakEoverPmc, hSigmaEoverPmc, "EoverP",dirName,
 		   hPeakEoverPmc_meanInRange,lowRangeValueForMean, upRangeValueForMean);
 
   TH1F* hPeakEoverPdata_templateFit = NULL;
-  if (hPeakShift_MCdata) hPeakEoverPdata_templateFit = new TH1F("hPeakEoverPdata_templateFit","",nCorrEnergyBins,corrEnergybinEdges.data());
+  if (hPeakShift_MCdata && hScaleFactor_MCdata) hPeakEoverPdata_templateFit = new TH1F("hPeakEoverPdata_templateFit","",nCorrEnergyBins,corrEnergybinEdges.data());
   if (hPeakEoverPdata_templateFit) {
+    // the following is because we get peak of data distribution from template by taking MC, dividing by scale factor in each bin and adding the shift
+    // this is because the template acts by changing the x in MC, x_MC, to x in data, x_D in the following way:
+    // x_MC = (x_D - mu_D)/sigma_D, where mu_D is the shift and 1/sigma_D is the scale factor
     hPeakEoverPdata_templateFit->Sumw2();
-    hPeakEoverPdata_templateFit->Add(hPeakEoverPmc,hPeakShift_MCdata,1.0,-1.0);  // data = MC - ("MC-Data")
+    hPeakEoverPdata_templateFit->Divide(hPeakEoverPmc,hScaleFactor_MCdata,1.0,1.0);
+    hPeakEoverPdata_templateFit->Add(hPeakShift_MCdata,1.0);  // data = MC/scale_factor + shift (with shift < 0 since data are shifted to the left of MC)
   }
 
   drawPlotDataMC(hPeakEoverPdata, hPeakEoverPmc, MCSampleName, xAxisName, "peak(E/P) from fit", "modeEoverPfromFit",dirName,"fit with Crystal Ball");
   if (hPeakEoverPdata_templateFit) drawPlotDataMC(hPeakEoverPdata_templateFit, hPeakEoverPmc, MCSampleName, xAxisName, "peak(E/P) from fit", 
-						  "modeEoverPfromTemplateFit",dirName,"fit with template (data) and Crystal Ball (MC)");
+						  "modeEoverPfromTemplateFit",dirName,"fit with template (data) and Crystal Ball (MC)","hPeakEoverPdata_templateFit");
   drawPlotDataMC(hSigmaEoverPdata, hSigmaEoverPmc, MCSampleName, xAxisName, "#sigma(E/P) from fit", "sigmaEoverPfromFit",dirName,"fit with Crystal Ball");
   if ( (hPeakEoverPdata_meanInRange != NULL) && (hPeakEoverPmc_meanInRange != NULL) ) {
     drawPlotDataMC(hPeakEoverPdata_meanInRange, hPeakEoverPmc_meanInRange, MCSampleName, xAxisName, "peak(E/P)", "modeEoverP_usingMean",dirName,
 		   titleForPlotsWithMeanInRange);
   }
 
-  // quick plot of the shift between data and MC peak, as obtained from fit of data distribution with MC template
+  // // quick plot of the shift between data and MC peak, as obtained from fit of data distribution with MC template
+  // This is not the real shift, it is just the parameter from the fit, the difference in the position of the peaks in data and MC is calculated above
+  // if (hPeakShift_MCdata) {
 
-  if (hPeakShift_MCdata) {
-
-    TCanvas *cshift = new TCanvas("cshift","");
-    hPeakShift_MCdata->SetTitle("peak shift (MC - DATA) from template fit");
-    hPeakShift_MCdata->SetStats(0);
-    hPeakShift_MCdata->Draw("HE");
-    hPeakShift_MCdata->GetXaxis()->SetTitle(xAxisName.c_str());
-    hPeakShift_MCdata->GetYaxis()->SetTitle("peak(E/P) shift");
-    hPeakShift_MCdata->GetXaxis()->SetLabelSize(0.05);
-    hPeakShift_MCdata->GetXaxis()->SetTitleSize(0.06);
-    hPeakShift_MCdata->GetXaxis()->SetTitleOffset(0.8);
-    hPeakShift_MCdata->GetYaxis()->SetTitleSize(0.045);
-    hPeakShift_MCdata->GetYaxis()->SetTitleOffset(1.1);
-    cshift->SaveAs((dirName + "EoverP_peakShift_MCdata.png").c_str());
-    cshift->SaveAs((dirName + "EoverP_peakShift_MCdata.pdf").c_str());
-    delete cshift;  
+  //   TCanvas *cshift = new TCanvas("cshift","");
+  //   hPeakShift_MCdata->SetTitle("peak shift (MC - DATA) from template fit");
+  //   hPeakShift_MCdata->SetStats(0);
+  //   hPeakShift_MCdata->Draw("HE");
+  //   hPeakShift_MCdata->GetXaxis()->SetTitle(xAxisName.c_str());
+  //   hPeakShift_MCdata->GetYaxis()->SetTitle("peak(E/P) shift");
+  //   hPeakShift_MCdata->GetXaxis()->SetLabelSize(0.05);
+  //   hPeakShift_MCdata->GetXaxis()->SetTitleSize(0.06);
+  //   hPeakShift_MCdata->GetXaxis()->SetTitleOffset(0.8);
+  //   hPeakShift_MCdata->GetYaxis()->SetTitleSize(0.045);
+  //   hPeakShift_MCdata->GetYaxis()->SetTitleOffset(1.1);
+  //   cshift->SaveAs((dirName + "EoverP_peakShift_MCdata.png").c_str());
+  //   cshift->SaveAs((dirName + "EoverP_peakShift_MCdata.pdf").c_str());
+  //   delete cshift;  
   
-  }
+  // }
 
   // MC only study
 
@@ -1312,16 +1546,11 @@ Int_t main(Int_t argc, char* argv[]) {
 
   Int_t doAll_flag = 1;
   Int_t doLoop_flag = 1;
+  Int_t doLoopMC_flag = 1;
   Int_t doPlot_flag = 1;
 
   string dirName = "";   // will be a path like "plot/<name>/" . Note the ending "/" 
 
-  Option* option = new Option();
-  option->Set_data2016(1);
-  option->Set_skim1lep1jet80X(1);
-  option->Set_fit2sideCB(0);
-  option->Set_setScaleOnY(1);
-  option->Set_useE(1);
  
   if (argc > 1) {
 
@@ -1331,7 +1560,11 @@ Int_t main(Int_t argc, char* argv[]) {
       if (thisArgument == "-nl") {
 	cout << "Passing option -nl: skip Loop on ntuples" << endl;
 	doLoop_flag = 0;  // -nl --> no Loop
+	doLoopMC_flag = 0;  // -nl --> no Loop, so it implies no loop on MC
 	doAll_flag = 0;
+      }	else if (thisArgument == "-nlMC") {
+	cout << "Passing option -nlMC: skip Loop on MC ntuples (but do loop for data)." << endl; // Useful when new data are available but MC didn't change.
+	doLoopMC_flag = 0; 
       } else if (thisArgument == "-np") {
 	cout << "Passing option -np: skip creation of plots" << endl;
 	doPlot_flag = 0;  // -np --> no plots
@@ -1339,7 +1572,7 @@ Int_t main(Int_t argc, char* argv[]) {
       } else if (thisArgument == "-dn") {   // -dn --> directory name
 	cout << "Passing option -dn: passing name for directories to be created" << endl;
 	dirName = string(argv[i+1]);
-	option->Set_dirName(string(argv[i+1]));
+	//option->Set_dirName(string(argv[i+1]));
 	cout << "Saving output in '" << dirName << "'" << endl;
 	i++;
       }
@@ -1347,6 +1580,14 @@ Int_t main(Int_t argc, char* argv[]) {
     }
 
   }
+
+  Option* option = new Option();
+  option->Set_data2016(1);
+  option->Set_skim1lep1jet80X(1);
+  option->Set_fit2sideCB(0);
+  option->Set_setScaleOnY(1);
+  option->Set_useE(1);
+  option->Set_dirName(dirName);
 
   vector<string> sampleName;
   sampleName.push_back("DATA");
@@ -1363,12 +1604,16 @@ Int_t main(Int_t argc, char* argv[]) {
   corrEnergybinEdges.push_back(225.0);
   if (USE_E) {
     corrEnergybinEdges.push_back(275.0);
+    corrEnergybinEdges.push_back(350.0);
     corrEnergybinEdges.push_back(450.0);
+    corrEnergybinEdges.push_back(650.0);
     corrEnergybinEdges.push_back(900.0);
   } else {
     corrEnergybinEdges.push_back(275.0);
     //corrEnergybinEdges.push_back(350.0);
-    corrEnergybinEdges.push_back(450.0);
+    corrEnergybinEdges.push_back(325.0);
+    corrEnergybinEdges.push_back(425.0);
+    corrEnergybinEdges.push_back(600.0);
     corrEnergybinEdges.push_back(900.0);
   }    
 
@@ -1389,6 +1634,8 @@ Int_t main(Int_t argc, char* argv[]) {
 
     for (UInt_t i = 0; i < sampleName.size(); i++) {
     
+      if (!doLoopMC_flag && (sampleName[i] != "DATA")) continue;
+
       // create chain                                                                                                         
     
       TChain* chain = new TChain("tree");
@@ -1423,6 +1670,7 @@ Int_t main(Int_t argc, char* argv[]) {
   // plotEoverPdistribution(sampleName[0], corrEnergybinEdges);
   // plotEoverPdistribution(sampleName[1], corrEnergybinEdges);
 
+  plotHistogramsFromFile(sampleName[0],sampleName[1], dirName);
 
   return 0;
 
