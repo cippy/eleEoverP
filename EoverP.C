@@ -453,6 +453,7 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges
      exit(EXIT_FAILURE);
    }
 
+
    string fwgtname = "";
    if (USE_E) fwgtname = "hEcorrWeight_dataMCratio.root";
    else fwgtname = "hETcorrWeight_dataMCratio.root";
@@ -465,10 +466,14 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges
      exit(EXIT_FAILURE);
    }
    TH1F *hwgt = (TH1F*) fdataMCratioWeight->Get("hdataMCratio");
+   //hwgt->SetDirectory(0);
    if (!hwgt) {
      cout << "Error: histogram not found in file '" << fwgtname << "'. End of programme." << endl;
      exit(EXIT_FAILURE);
    }
+
+
+   rootFile->cd(); // get back to this file
 
    vector<TH1F*> hEoverP_energyBin(nEnergyBins,NULL);
    // histogram to store the mean energy in a given bin, useful to plot E/P asf of the mean energy in the bin with a TGraph
