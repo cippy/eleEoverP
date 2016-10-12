@@ -53,6 +53,7 @@
 #define FIT_2SIDE_CB 0      // 0 for single tail Crystal Ball for the fit, 1 for double tail
 #define SET_SCALE_ON_Y 0    // select default or user defined ranges for y axis
 #define USE_E 1 // 0 for ET and 1 for E in the binning
+#define USE_RAWE 0 // when 1, use raw SC energy instead of regression corrected ECAL energy
 
 using namespace std;
 
@@ -386,7 +387,7 @@ Int_t getBinNumber(const Float_t value, const vector<Float_t> &binEdgesVector) {
 
 //============================================================
 
-void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinEdges, const string& dirName)
+void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges, const string& dirName)
 {
 
 
@@ -411,6 +412,8 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
 
    // branches for MC study
    if (sampleName != "DATA"){
+     //fChain->SetBranchStatus("weight",1);
+
      fChain->SetBranchStatus("ngenLep",1);
      fChain->SetBranchStatus("genLep_motherId",1);
      fChain->SetBranchStatus("genLep_pdgId",1);
@@ -423,24 +426,24 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
    gStyle->SetStatStyle(0);
 
    // passing from main
-   // vector<Float_t> corrEnergybinEdges;
-   // corrEnergybinEdges.push_back(25.0);
-   // corrEnergybinEdges.push_back(50.0);
-   // corrEnergybinEdges.push_back(75.0);
-   // corrEnergybinEdges.push_back(100.0);
-   // corrEnergybinEdges.push_back(150.0);
-   // corrEnergybinEdges.push_back(200.0);
-   // corrEnergybinEdges.push_back(250.0);
-   // corrEnergybinEdges.push_back(300.0);
-   // corrEnergybinEdges.push_back(350.0);
-   // corrEnergybinEdges.push_back(450.0);
-   // corrEnergybinEdges.push_back(600.0);
-   // corrEnergybinEdges.push_back(750.0);
-   // corrEnergybinEdges.push_back(900.0);
+   // vector<Float_t> energybinEdges;
+   // energybinEdges.push_back(25.0);
+   // energybinEdges.push_back(50.0);
+   // energybinEdges.push_back(75.0);
+   // energybinEdges.push_back(100.0);
+   // energybinEdges.push_back(150.0);
+   // energybinEdges.push_back(200.0);
+   // energybinEdges.push_back(250.0);
+   // energybinEdges.push_back(300.0);
+   // energybinEdges.push_back(350.0);
+   // energybinEdges.push_back(450.0);
+   // energybinEdges.push_back(600.0);
+   // energybinEdges.push_back(750.0);
+   // energybinEdges.push_back(900.0);
 
    TH1::SetDefaultSumw2();            //all the following histograms will automatically call TH1::Sumw2() 
 
-   Int_t nCorrEnergyBins = corrEnergybinEdges.size() -1;
+   Int_t nEnergyBins = energybinEdges.size() -1;
 
    string rootfileName = dirName + "EoverP_" + sampleName + ".root";
 
@@ -450,13 +453,30 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
      exit(EXIT_FAILURE);
    }
 
-   vector<TH1F*> hEoverP_corrEnergyBin(nCorrEnergyBins,NULL);
-   // histogram to store the mean energy in a given bin, useful to plot E/P asf of the mean energy in the bin with a TGraph
-   TH1F* hMeanEnergyInCorrEnergyBin = new TH1F("hMeanEnergyInCorrEnergyBin","",nCorrEnergyBins,corrEnergybinEdges.data());
+   string fwgtname = "";
+   if (USE_E) fwgtname = "hEcorrWeight_dataMCratio.root";
+   else fwgtname = "hETcorrWeight_dataMCratio.root";
 
-   vector<TH1F*> hEcorrOverEtrue_corrEnergyBin(nCorrEnergyBins,NULL);
-   vector<TH1F*> hErawOverEtrue_corrEnergyBin(nCorrEnergyBins,NULL);
-   vector<TH1F*> hPtrackOverEtrue_corrEnergyBin(nCorrEnergyBins,NULL);
+   TFile* fdataMCratioWeight = TFile::Open(fwgtname.c_str(),"READ");
+   if (!fdataMCratioWeight || !fdataMCratioWeight->IsOpen()) {
+     cout<<"*******************************"<<endl;
+     cout<<"Error: could not find file to reweight MC based on data/MC ratio for Ecorr distribution."<<endl;
+     cout<<"*******************************"<<endl;
+     exit(EXIT_FAILURE);
+   }
+   TH1F *hwgt = (TH1F*) fdataMCratioWeight->Get("hdataMCratio");
+   if (!hwgt) {
+     cout << "Error: histogram not found in file '" << fwgtname << "'. End of programme." << endl;
+     exit(EXIT_FAILURE);
+   }
+
+   vector<TH1F*> hEoverP_energyBin(nEnergyBins,NULL);
+   // histogram to store the mean energy in a given bin, useful to plot E/P asf of the mean energy in the bin with a TGraph
+   TH1F* hMeanEnergyInEnergyBin = new TH1F("hMeanEnergyInEnergyBin","",nEnergyBins,energybinEdges.data());
+
+   vector<TH1F*> hEcorrOverEtrue_energyBin(nEnergyBins,NULL);
+   vector<TH1F*> hErawOverEtrue_energyBin(nEnergyBins,NULL);
+   vector<TH1F*> hPtrackOverEtrue_energyBin(nEnergyBins,NULL);
 
    // for additional studies
    TH1F* hSigmaIetaIeta_lowE = new TH1F("hSigmaIetaIeta_lowE","",96,0.0,0.012);
@@ -466,19 +486,23 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
    TH1F* hPt_lowE = new TH1F("hPt_lowE","",140,0.0,700.0);
    TH1F* hPt_hotE = new TH1F("hPt_hotE","",140,0.0,700.0);   
 
-   for (Int_t i = 0; i < nCorrEnergyBins; i++) {
-     hEoverP_corrEnergyBin[i] = new TH1F(Form("hEoverP_corrEnergyBin%1.0fTo%1.0f",corrEnergybinEdges[i],corrEnergybinEdges[i+1]),"",200,0.05,2.05);
+   TH1F* hElePt = new TH1F("hElePt","",200,0,1000);
+   TH1F* hEleEcorr = new TH1F("hEleEcorr","",200,0,1000);
+   TH1F* hEleEraw = new TH1F("hEleEraw","",200,0,1000);
+
+   for (Int_t i = 0; i < nEnergyBins; i++) {
+     hEoverP_energyBin[i] = new TH1F(Form("hEoverP_energyBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",200,0.05,2.05);
    }
 
    if (sampleName != "DATA") {
-     for (Int_t i = 0; i < nCorrEnergyBins; i++) {
-       hEcorrOverEtrue_corrEnergyBin[i] = new TH1F(Form("hEcorrOverEtrue_corrEnergyBin%1.0fTo%1.0f",corrEnergybinEdges[i],corrEnergybinEdges[i+1]),"",200,0.55,1.55);
-       hErawOverEtrue_corrEnergyBin[i] = new TH1F(Form("hErawOverEtrue_corrEnergyBin%1.0fTo%1.0f",corrEnergybinEdges[i],corrEnergybinEdges[i+1]),"",200,0.55,1.55);
-       hPtrackOverEtrue_corrEnergyBin[i] = new TH1F(Form("hPtrackOverEtrue_corrEnergyBin%1.0fTo%1.0f",corrEnergybinEdges[i],corrEnergybinEdges[i+1]),"",200,0.05,2.05);
+     for (Int_t i = 0; i < nEnergyBins; i++) {
+       hEcorrOverEtrue_energyBin[i] = new TH1F(Form("hEcorrOverEtrue_energyBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",200,0.55,1.55);
+       hErawOverEtrue_energyBin[i] = new TH1F(Form("hErawOverEtrue_energyBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",200,0.55,1.55);
+       hPtrackOverEtrue_energyBin[i] = new TH1F(Form("hPtrackOverEtrue_energyBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",200,0.05,2.05);
      }
    }
 
-   TH1F* hEoP_template = new TH1F("hEoP_template","template",200,0.05,2.05);
+   TH1F* hEoP_template = new TH1F("hEoP_template","template",200,0.05,2.05);  // a template for E/P in the whole energy spectrum (not used at the moment)
 
    // Float_t lowMeanCut = 0.85;
    // Float_t upMeanCut = 1.15;
@@ -489,13 +513,15 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
    Float_t Etrue = 0.0; 
    /////////////////////////
 
+   Double_t wgt = 1.0;
+
    Long64_t nentries = fChain->GetEntriesFast();
 
    Long64_t nbytes = 0, nb = 0;
 
    for (Long64_t jentry=0; jentry<nentries;jentry++) {
-
-      Long64_t ientry = LoadTree(jentry);
+       
+     Long64_t ientry = LoadTree(jentry);
       if (ientry < 0) break;
       nb = fChain->GetEntry(jentry);   nbytes += nb;
       // if (Cut(ientry) < 0) continue;
@@ -506,28 +532,43 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
       if (!( nEle10V == 1 && nEle40T == 1) ) continue;
       if ( !( fabs(LepGood_pdgId[0]) == 11 && LepGood_pt[0] > 40 && fabs(LepGood_eta[0]) < 1.0) ) continue;
 
-      Double_t energyToUse = LepGood_correctedEcalEnergy[0];
+      Double_t energyToUse = -1.0;
+      if (USE_RAWE) energyToUse = LepGood_superCluster_rawEnergy[0];
+      else energyToUse = LepGood_correctedEcalEnergy[0];
+
       if (!USE_E) {
 	Double_t theta = 2. * atan(exp(-LepGood_eta[0])); 
 	energyToUse *= sin(theta);
       } 
 
+      if (sampleName != "DATA") wgt = (Double_t) hwgt->GetBinContent(hwgt->FindBin(energyToUse));
+      else wgt = 1.0;
+
       // fill these before cutting on r9
       if (energyToUse > 99.9 && energyToUse < 225.0) {
-	hR9_lowE->Fill(LepGood_full5x5_r9[0]);
+	hR9_lowE->Fill(LepGood_full5x5_r9[0],wgt);
       } else if (energyToUse > 349.9 && energyToUse < 450.0) {
-	hR9_hotE->Fill(LepGood_full5x5_r9[0]);
+	hR9_hotE->Fill(LepGood_full5x5_r9[0],wgt);
       }
 
       if (!(LepGood_full5x5_r9[0] > 0.94)) continue;
 
       if (energyToUse > 99.9 && energyToUse < 225.0) {
-	hSigmaIetaIeta_lowE->Fill(LepGood_full5x5_sigmaIetaIeta[0]);
-	hPt_lowE->Fill(LepGood_pt[0]);
+	hSigmaIetaIeta_lowE->Fill(LepGood_full5x5_sigmaIetaIeta[0],wgt);
+	hPt_lowE->Fill(LepGood_pt[0],wgt);
       } else if (energyToUse > 349.9 && energyToUse < 450.0) {
-	hSigmaIetaIeta_hotE->Fill(LepGood_full5x5_sigmaIetaIeta[0]);
-	hPt_hotE->Fill(LepGood_pt[0]);
+	hSigmaIetaIeta_hotE->Fill(LepGood_full5x5_sigmaIetaIeta[0],wgt);
+	hPt_hotE->Fill(LepGood_pt[0],wgt);
       }
+
+      hElePt->Fill(LepGood_pt[0],wgt);
+      hEleEcorr->Fill(LepGood_correctedEcalEnergy[0],wgt);  
+      hEleEraw->Fill(LepGood_superCluster_rawEnergy[0],wgt); 
+
+      Double_t EoverP_toUse = -1.0;
+      // LepGood_eSuperClusterOverP[0] is E_regrCorr/P_track. If we need E_raw/P_track then divide by E_egrCorr and multiply by E_raw
+      if (USE_RAWE) EoverP_toUse = LepGood_eSuperClusterOverP[0] * LepGood_superCluster_rawEnergy[0] / LepGood_correctedEcalEnergy[0];
+      else EoverP_toUse = LepGood_eSuperClusterOverP[0];
 
 
       //if (!(fabs(LepGood_pdgId[0]) == 11 && LepGood_pt[0] > 40 && fabs(LepGood_eta[0]) > 1.0 && fabs(LepGood_eta[0]) < 1.479)) continue;
@@ -571,84 +612,92 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &corrEnergybinE
 
       // end of loop to match gen and reco electrons
 
+      hEoP_template->Fill(EoverP_toUse,wgt);
+
       // look for the bin in the LepGood_correctedEcalEnergy variable      
-      Int_t bin = getBinNumber(energyToUse,corrEnergybinEdges);  // this function returns negative value if bin not found
-
-      hEoP_template->Fill(LepGood_eSuperClusterOverP[0]);
-
+      Int_t bin = getBinNumber(energyToUse,energybinEdges);  // this function returns negative value if bin not found
+      
       if (bin >= 0) {
 
-	hEoverP_corrEnergyBin[bin]->Fill(LepGood_eSuperClusterOverP[0]);
+	hEoverP_energyBin[bin]->Fill(EoverP_toUse,wgt);
 
 	//sum the energy to the bin content in the bin it belongs to (at the end we will divide by the number of entries in each bin)
 	// using bin+1 because the histogram bin number goes from 1 to number of bins, while "bin" variable starts from 0
-	hMeanEnergyInCorrEnergyBin->SetBinContent(bin+1, energyToUse + hMeanEnergyInCorrEnergyBin->GetBinContent(bin+1));  
+	hMeanEnergyInEnergyBin->SetBinContent(bin+1, energyToUse + hMeanEnergyInEnergyBin->GetBinContent(bin+1));  
+
+      }
+
+      Int_t etrueBin = getBinNumber(Etrue,energybinEdges);
+
+      if (etrueBin >= 0) {
 
 	if (MCtruthMatchFound) {
-
-	  hEcorrOverEtrue_corrEnergyBin[bin]->Fill(LepGood_correctedEcalEnergy[0]/Etrue);
-	  hErawOverEtrue_corrEnergyBin[bin]->Fill(LepGood_superCluster_rawEnergy[0]/Etrue);
-	  hPtrackOverEtrue_corrEnergyBin[bin]->Fill(LepGood_correctedEcalEnergy[0]/(LepGood_eSuperClusterOverP[0]*Etrue));    
+	  
+	  hEcorrOverEtrue_energyBin[etrueBin]->Fill(LepGood_correctedEcalEnergy[0]/Etrue,wgt);
+	  hErawOverEtrue_energyBin[etrueBin]->Fill(LepGood_superCluster_rawEnergy[0]/Etrue,wgt);
+	  hPtrackOverEtrue_energyBin[etrueBin]->Fill(LepGood_correctedEcalEnergy[0]/(LepGood_eSuperClusterOverP[0]*Etrue),wgt);    
 	  // Ptrack/Etrue = corrE * (EoverP)^-1 / Etrue
-
 	}
-
       }
 
 
    }  // end of loop on entries
 
-   for (Int_t i = 0; i < nCorrEnergyBins; i++) {
+   for (Int_t i = 0; i < nEnergyBins; i++) {
 
-     //hEoverP_corrEnergyBin[i]->SetStats(0);  // keep stat box in file, and remove in directly the function that plots it on canvas
+     //hEoverP_energyBin[i]->SetStats(0);  // keep stat box in file, and remove in directly the function that plots it on canvas
      // keep the following axis settings
-     hEoverP_corrEnergyBin[i]->GetXaxis()->SetTitle("E / P");
-     hEoverP_corrEnergyBin[i]->GetXaxis()->SetTitleSize(0.06);
-     hEoverP_corrEnergyBin[i]->GetXaxis()->SetTitleOffset(0.8);
-     hEoverP_corrEnergyBin[i]->GetYaxis()->SetTitle("events");
-     hEoverP_corrEnergyBin[i]->GetYaxis()->SetTitleSize(0.055);
-     hEoverP_corrEnergyBin[i]->GetYaxis()->SetTitleOffset(0.8);
+     hEoverP_energyBin[i]->GetXaxis()->SetTitle("E / P");
+     hEoverP_energyBin[i]->GetXaxis()->SetTitleSize(0.06);
+     hEoverP_energyBin[i]->GetXaxis()->SetTitleOffset(0.8);
+     hEoverP_energyBin[i]->GetYaxis()->SetTitle("events");
+     hEoverP_energyBin[i]->GetYaxis()->SetTitleSize(0.055);
+     hEoverP_energyBin[i]->GetYaxis()->SetTitleOffset(0.8);
 
-     hMeanEnergyInCorrEnergyBin->SetBinContent(i+1, hMeanEnergyInCorrEnergyBin->GetBinContent(i+1)/hEoverP_corrEnergyBin[i]->GetEntries());
+     hMeanEnergyInEnergyBin->SetBinContent(i+1, hMeanEnergyInEnergyBin->GetBinContent(i+1)/hEoverP_energyBin[i]->GetEntries());
 
    }
+
+   string whichEnergy = "";
+   if (USE_RAWE) whichEnergy = "raw";
+   else whichEnergy = "corrected";
 
    if (USE_E) {
-     hMeanEnergyInCorrEnergyBin->GetXaxis()->SetTitle("corrected E [GeV]");
-     hMeanEnergyInCorrEnergyBin->GetYaxis()->SetTitle("mean E [GeV]");
+     hMeanEnergyInEnergyBin->GetXaxis()->SetTitle((whichEnergy + " E [GeV]").c_str());
+     hMeanEnergyInEnergyBin->GetYaxis()->SetTitle("mean E [GeV]");
    } else {
-     hMeanEnergyInCorrEnergyBin->GetXaxis()->SetTitle("corrected E_{T} [GeV]");
-     hMeanEnergyInCorrEnergyBin->GetYaxis()->SetTitle("mean E_{T} [GeV]");
+     hMeanEnergyInEnergyBin->GetXaxis()->SetTitle((whichEnergy + " E_{T} [GeV]").c_str());
+     hMeanEnergyInEnergyBin->GetYaxis()->SetTitle("mean E_{T} [GeV]");
    }
-   hMeanEnergyInCorrEnergyBin->GetXaxis()->SetTitleSize(0.06);
-   hMeanEnergyInCorrEnergyBin->GetXaxis()->SetTitleOffset(0.8);
-   hMeanEnergyInCorrEnergyBin->GetYaxis()->SetTitleSize(0.055);
-   hMeanEnergyInCorrEnergyBin->GetYaxis()->SetTitleOffset(0.8);
+   hMeanEnergyInEnergyBin->GetXaxis()->SetTitleSize(0.06);
+   hMeanEnergyInEnergyBin->GetXaxis()->SetTitleOffset(0.8);
+   hMeanEnergyInEnergyBin->GetYaxis()->SetTitleSize(0.055);
+   hMeanEnergyInEnergyBin->GetYaxis()->SetTitleOffset(0.8);
 
    if (sampleName != "DATA") {
 
-     for (Int_t i = 0; i < nCorrEnergyBins; i++) {
+     for (Int_t i = 0; i < nEnergyBins; i++) {
 
-       hEcorrOverEtrue_corrEnergyBin[i]->GetXaxis()->SetTitle("E_{corr} / E_{true}");
-       hEcorrOverEtrue_corrEnergyBin[i]->GetXaxis()->SetTitleSize(0.06);
-       hEcorrOverEtrue_corrEnergyBin[i]->GetXaxis()->SetTitleOffset(0.75);
-       hEcorrOverEtrue_corrEnergyBin[i]->GetYaxis()->SetTitle("events");
-       hEcorrOverEtrue_corrEnergyBin[i]->GetYaxis()->SetTitleSize(0.055);
-       hEcorrOverEtrue_corrEnergyBin[i]->GetYaxis()->SetTitleOffset(0.8);
+       hEcorrOverEtrue_energyBin[i]->GetXaxis()->SetTitle("E_{corr} / E_{true}");
+       hEcorrOverEtrue_energyBin[i]->GetXaxis()->SetTitleSize(0.06);
+       hEcorrOverEtrue_energyBin[i]->GetXaxis()->SetTitleOffset(0.75);
+       hEcorrOverEtrue_energyBin[i]->GetYaxis()->SetTitle("events");
+       hEcorrOverEtrue_energyBin[i]->GetYaxis()->SetTitleSize(0.055);
+       hEcorrOverEtrue_energyBin[i]->GetYaxis()->SetTitleOffset(0.8);
 
-       hErawOverEtrue_corrEnergyBin[i]->GetXaxis()->SetTitle("E_{raw} / E_{true}");
-       hErawOverEtrue_corrEnergyBin[i]->GetXaxis()->SetTitleSize(0.06);
-       hErawOverEtrue_corrEnergyBin[i]->GetXaxis()->SetTitleOffset(0.75);
-       hErawOverEtrue_corrEnergyBin[i]->GetYaxis()->SetTitle("events");
-       hErawOverEtrue_corrEnergyBin[i]->GetYaxis()->SetTitleSize(0.055);
-       hErawOverEtrue_corrEnergyBin[i]->GetYaxis()->SetTitleOffset(0.8);
+       hErawOverEtrue_energyBin[i]->GetXaxis()->SetTitle("E_{raw} / E_{true}");
+       hErawOverEtrue_energyBin[i]->GetXaxis()->SetTitleSize(0.06);
+       hErawOverEtrue_energyBin[i]->GetXaxis()->SetTitleOffset(0.75);
+       hErawOverEtrue_energyBin[i]->GetYaxis()->SetTitle("events");
+       hErawOverEtrue_energyBin[i]->GetYaxis()->SetTitleSize(0.055);
+       hErawOverEtrue_energyBin[i]->GetYaxis()->SetTitleOffset(0.8);
 
-       hPtrackOverEtrue_corrEnergyBin[i]->GetXaxis()->SetTitle("P_{track} / E_{true}");
-       hPtrackOverEtrue_corrEnergyBin[i]->GetXaxis()->SetTitleSize(0.06);
-       hPtrackOverEtrue_corrEnergyBin[i]->GetXaxis()->SetTitleOffset(0.75);
-       hPtrackOverEtrue_corrEnergyBin[i]->GetYaxis()->SetTitle("events");
-       hPtrackOverEtrue_corrEnergyBin[i]->GetYaxis()->SetTitleSize(0.055);
-       hPtrackOverEtrue_corrEnergyBin[i]->GetYaxis()->SetTitleOffset(0.8);
+       hPtrackOverEtrue_energyBin[i]->GetXaxis()->SetTitle("P_{track} / E_{true}");
+       hPtrackOverEtrue_energyBin[i]->GetXaxis()->SetTitleSize(0.06);
+       hPtrackOverEtrue_energyBin[i]->GetXaxis()->SetTitleOffset(0.75);
+       hPtrackOverEtrue_energyBin[i]->GetYaxis()->SetTitle("events");
+       hPtrackOverEtrue_energyBin[i]->GetYaxis()->SetTitleSize(0.055);
+       hPtrackOverEtrue_energyBin[i]->GetYaxis()->SetTitleOffset(0.8);
     
      }
 
@@ -672,7 +721,7 @@ void getTexMCSampleName(const string &MCSampleName, string &texMCSampleName) {
 
 //=========================================================================
 
-void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnergybinEdges, TH1F* hPeak, TH1F* hSigma, const string &hNameID, const string &dirName, TH1F* hPeakMeanInRange = NULL, const Double_t lowRangeValue = 0.0, const Double_t upRangeValue = 2.0, TH1F* hPeakShift_MCdata = NULL, TH1F* hScaleFactor_MCdata = NULL) {
+void plotDistribution(const string &sampleName, const vector<Float_t> &energybinEdges, TH1F* hPeak, TH1F* hSigma, const string &hNameID, const string &dirName, TH1F* hPeakMeanInRange = NULL, const Double_t lowRangeValue = 0.0, const Double_t upRangeValue = 2.0, TH1F* hPeakShift_MCdata = NULL, TH1F* hScaleFactor_MCdata = NULL) {
 
   cout << endl;
 
@@ -743,15 +792,15 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
   // end of access of MC file to get templates
   // -----------------------------------------------------------
 
-  UInt_t nBins = corrEnergybinEdges.size() -1;
+  UInt_t nBins = energybinEdges.size() -1;
 
   for (UInt_t i = 0; i < nBins; i++) {
 
-    cout << " Energy bin: [" << corrEnergybinEdges[i] << ", " << corrEnergybinEdges[i+1] << "]" << endl;
+    cout << " Energy bin: [" << energybinEdges[i] << ", " << energybinEdges[i+1] << "]" << endl;
 
-    htmp = (TH1F*)f->Get(Form("h%s_corrEnergyBin%1.0fTo%1.0f",hNameID.c_str(),corrEnergybinEdges[i],corrEnergybinEdges[i+1]));  
+    htmp = (TH1F*)f->Get(Form("h%s_energyBin%1.0fTo%1.0f",hNameID.c_str(),energybinEdges[i],energybinEdges[i+1]));  
     if (!htmp) {
-      cout << "Error: histogram " << Form("h%s_corrEnergyBin%1.0fTo%1.0f",hNameID.c_str(),corrEnergybinEdges[i],corrEnergybinEdges[i+1]) 
+      cout << "Error: histogram " << Form("h%s_energyBin%1.0fTo%1.0f",hNameID.c_str(),energybinEdges[i],energybinEdges[i+1]) 
 	   << " not found in file ' " << fileName << "'. End of programme." << endl;
       exit(EXIT_FAILURE);
     }
@@ -766,24 +815,24 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
     gStyle->SetOptFit(0112);
     hist->Draw("HE");
     if (sampleName == "DATA") {
-      if (corrEnergybinEdges[i] > 449.9) hist->Rebin(5); 
-      else if (corrEnergybinEdges[i] > 349.9) hist->Rebin(4);
-      else if (corrEnergybinEdges[i] > 274.9) hist->Rebin(3); 
-      else if (corrEnergybinEdges[i] > 174.9) hist->Rebin(2); 
-      //else if (corrEnergybinEdges[i] > 199.9) hist->Rebin(2); // when using E instead of Et 249.9 is ok
+      if (energybinEdges[i] > 449.9) hist->Rebin(5); 
+      else if (energybinEdges[i] > 349.9) hist->Rebin(4);
+      else if (energybinEdges[i] > 274.9) hist->Rebin(3); 
+      else if (energybinEdges[i] > 174.9) hist->Rebin(2); 
+      //else if (energybinEdges[i] > 199.9) hist->Rebin(2); // when using E instead of Et 249.9 is ok
     } else if (hNameID != "EoverP") {
       if (hNameID == "PtrackOverEtrue") {
-	if (corrEnergybinEdges[i] > 449.9) hist->Rebin(5); 
-	else if (corrEnergybinEdges[i] > 349.9) hist->Rebin(4); 
-	else if (corrEnergybinEdges[i] > 274.9) hist->Rebin(3); 
-	else if (corrEnergybinEdges[i] > 174.9) hist->Rebin(2); 
+	if (energybinEdges[i] > 449.9) hist->Rebin(5); 
+	else if (energybinEdges[i] > 349.9) hist->Rebin(4); 
+	else if (energybinEdges[i] > 274.9) hist->Rebin(3); 
+	else if (energybinEdges[i] > 174.9) hist->Rebin(2); 
       } else {
 	hist->GetXaxis()->SetRangeUser(0.85,1.15);
       }
     } else {
-      if (corrEnergybinEdges[i] > 549.9) hist->Rebin(4); 
-      else if (corrEnergybinEdges[i] > 349.9) hist->Rebin(3); 
-      else if (corrEnergybinEdges[i] > 224.9) hist->Rebin(2);      
+      if (energybinEdges[i] > 549.9) hist->Rebin(4); 
+      else if (energybinEdges[i] > 349.9) hist->Rebin(3); 
+      else if (energybinEdges[i] > 224.9) hist->Rebin(2);      
     }
     c->Update();
 
@@ -792,7 +841,7 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
     Double_t gaussEdgeL = 0.9;  //left side of the gaussian to be used in the fit (I use a variable so that I change this value only once)
     Double_t gaussEdgeR = 1.1;  //right side ...
     // some general settings
-    if (corrEnergybinEdges[i] > 349.9) {
+    if (energybinEdges[i] > 349.9) {
       gaussEdgeL = 0.75;
       gaussEdgeR = 1.25;
     }
@@ -807,7 +856,7 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
 	  gaussEdgeR = 1.05;	
 	}
       } else {
-	if (corrEnergybinEdges[i] > 349.9) {
+	if (energybinEdges[i] > 349.9) {
 	  gaussEdgeL = 0.75;
 	  gaussEdgeR = 1.25;
 	}
@@ -905,23 +954,24 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
       delete htmp;
       fMC->cd();
       TH1F* htmpMC = NULL;
-      htmpMC = (TH1F*)fMC->Get(Form("hEoverP_corrEnergyBin%1.0fTo%1.0f",corrEnergybinEdges[i],corrEnergybinEdges[i+1]));  
+      htmpMC = (TH1F*)fMC->Get(Form("hEoverP_energyBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]));  
       if (!htmpMC) {
-	cout << "Error: histogram " << htmpMC->GetName() << " not found in file ' " << fileNameMC << "'. End of programme." << endl;
+	cout << "Error: histogram " << Form("hEoverP_energyBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]) 
+	     << " not found in file ' " << fileNameMC << "'. End of programme." << endl;
 	exit(EXIT_FAILURE);
       } else {
-	//cout << "Energy ["<< corrEnergybinEdges[i] <<"," <<corrEnergybinEdges[i+1]<< "] \t max htmpMC: " << htmpMC->GetBinContent(htmpMC->GetMaximumBin()) << endl;
+	//cout << "Energy ["<< energybinEdges[i] <<"," <<energybinEdges[i+1]<< "] \t max htmpMC: " << htmpMC->GetBinContent(htmpMC->GetMaximumBin()) << endl;
       }
 
-      hEoP_template = (TH1F*) htmpMC->Clone(Form("hEoverP_corrEnergyBin%1.0fTo%1.0f_MC",corrEnergybinEdges[i],corrEnergybinEdges[i+1]));
+      hEoP_template = (TH1F*) htmpMC->Clone(Form("hEoverP_energyBin%1.0fTo%1.0f_MC",energybinEdges[i],energybinEdges[i+1]));
       if (!hEoP_template) {
 	cout << "Error: hEoP_template is NULL! End of programme." << endl;
 	exit(EXIT_FAILURE);
       }	
       // rebinning if needed
-      if (corrEnergybinEdges[i] > 449.9) hEoP_template->Rebin(4); 
-      else if (corrEnergybinEdges[i] > 274.9) hEoP_template->Rebin(3);      
-      else if (corrEnergybinEdges[i] > 174.9) hEoP_template->Rebin(2);      
+      if (energybinEdges[i] > 449.9) hEoP_template->Rebin(4); 
+      else if (energybinEdges[i] > 274.9) hEoP_template->Rebin(3);      
+      else if (energybinEdges[i] > 174.9) hEoP_template->Rebin(2);      
 
       // end of access of MC file to get templates
       // -----------------------------------------------------------
@@ -931,7 +981,7 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
       //cout << "templateHistoFunc->GetIntegral() : " << templateHistoFunc->GetIntegral() << endl;
       Double_t templateFitRangeLow = 0.7;  // 0.7
       Double_t templateFitRangeUp = 1.8;   // 2.0
-      if (corrEnergybinEdges[i] > 274.9) {
+      if (energybinEdges[i] > 274.9) {
 	templateFitRangeLow = 0.75;
 	templateFitRangeUp = 1.8; 
       }
@@ -1040,14 +1090,19 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
       hSigma->SetBinError(i+1, frp1->ParError(3)); // 2 is mu (starts with alpha, which is parameter number 0)  
     }
 
+    string whichEnergy = "";
+    if (USE_RAWE) whichEnergy = "raw E";
+    else whichEnergy = "corrected E";
+    if ((sampleName != "DATA") && (hNameID != "EoverP")) whichEnergy = "true E";
+
     if (USE_E) {      
-      hist->SetTitle(Form("%1.0f < E [GeV] < %1.0f",corrEnergybinEdges[i],corrEnergybinEdges[i+1]));
-      c->SaveAs(Form("%s%sdistribution_E%1.0fTo%1.0f_%s.pdf",dirName.c_str(),hNameID.c_str(),corrEnergybinEdges[i],corrEnergybinEdges[i+1],sampleName.c_str()));
-      c->SaveAs(Form("%s%sdistribution_E%1.0fTo%1.0f_%s.png",dirName.c_str(),hNameID.c_str(),corrEnergybinEdges[i],corrEnergybinEdges[i+1],sampleName.c_str()));
+      hist->SetTitle(Form("%1.0f < %s [GeV] < %1.0f",energybinEdges[i],whichEnergy.c_str(),energybinEdges[i+1]));
+      c->SaveAs(Form("%s%sdistribution_E%1.0fTo%1.0f_%s.pdf",dirName.c_str(),hNameID.c_str(),energybinEdges[i],energybinEdges[i+1],sampleName.c_str()));
+      c->SaveAs(Form("%s%sdistribution_E%1.0fTo%1.0f_%s.png",dirName.c_str(),hNameID.c_str(),energybinEdges[i],energybinEdges[i+1],sampleName.c_str()));
     } else {
-      hist->SetTitle(Form("%1.0f < E_{T}[GeV] < %1.0f",corrEnergybinEdges[i],corrEnergybinEdges[i+1]));
-      c->SaveAs(Form("%s%sdistribution_ET%1.0fTo%1.0f_%s.pdf",dirName.c_str(),hNameID.c_str(),corrEnergybinEdges[i],corrEnergybinEdges[i+1],sampleName.c_str()));
-      c->SaveAs(Form("%s%sdistribution_ET%1.0fTo%1.0f_%s.png",dirName.c_str(),hNameID.c_str(),corrEnergybinEdges[i],corrEnergybinEdges[i+1],sampleName.c_str()));
+      hist->SetTitle(Form("%1.0f < %s_{T}[GeV] < %1.0f",energybinEdges[i],whichEnergy.c_str(),energybinEdges[i+1]));
+      c->SaveAs(Form("%s%sdistribution_ET%1.0fTo%1.0f_%s.pdf",dirName.c_str(),hNameID.c_str(),energybinEdges[i],energybinEdges[i+1],sampleName.c_str()));
+      c->SaveAs(Form("%s%sdistribution_ET%1.0fTo%1.0f_%s.png",dirName.c_str(),hNameID.c_str(),energybinEdges[i],energybinEdges[i+1],sampleName.c_str()));
     }
 
   }
@@ -1068,6 +1123,8 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &corrEnerg
 
 
 void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const string& xAxisName, const string& yAxisName, const string& canvasName, const string &dirName, const string &canvasTitle = "", const string& hNameToTriggerOptions = "", const Int_t setLogy = 0) {
+
+  TH1::SetDefaultSumw2();            //all the following histograms will automatically call TH1::Sumw2() 
 
   string hOriginalTitle = "";
 
@@ -1184,6 +1241,47 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
       // ratioplotCopy->SetMaximum(0.14);
     }
   }
+  
+  if( canvasName== "modeEoverPfromFit" ) {
+
+    // save ratioplot in root file and also produce a TGraphError associating each point to the mean energy in the bin. This information is stored in the files with all histgrams
+    string filename = dirName + "EoverP_" + MCSampleName + ".root";	
+    TFile *histfile = new TFile((filename).c_str(),"READ");
+    if (!histfile || !histfile->IsOpen()) {
+      cout << "Error: file \"" << filename << "\" was not opened." << endl;
+      exit(EXIT_FAILURE);
+    }
+
+    TH1F* htmp = NULL;
+    htmp = (TH1F*) histfile->Get("hMeanEnergyInEnergyBin");  
+    if (!htmp) {
+      cout << "Error: histogram not found in file ' " << filename << "'. End of programme." << endl;
+      exit(EXIT_FAILURE);
+    }
+    TH1F* hMeanEnergy = (TH1F*) htmp->Clone(); 
+
+    string tmpString = "";
+    if (USE_RAWE) tmpString = "Raw";
+    else tmpString = "RegrCorr";
+    TH1F * histo = (TH1F*) ratioplot->Clone( ("EoverP_vs" + tmpString + "Energy_dataMCRatio").c_str());
+
+    TGraphErrors *graph = new TGraphErrors(); 
+    for (Int_t i = 0; i < hMeanEnergy->GetNbinsX(); i++) {
+      graph->SetPoint(i,hMeanEnergy->GetBinContent(i+1),histo->GetBinContent(i+1));
+      graph->SetPointError(i,hMeanEnergy->GetBinError(i+1),histo->GetBinError(i+1));
+    }
+
+    TFile *f = new TFile( (dirName + "EoverP_vs" + tmpString + "Energy_dataMCRatio.root").c_str(),"RECREATE");
+    f->cd();
+    histo->Write();
+    string graphName(histo->GetName());
+    graphName = "graph" + graphName; 
+    graph->Write(graphName.c_str());
+    f->Close();
+    delete f;
+
+  }
+
 
   cfit->SaveAs( (dirName + canvasName + ".pdf").c_str() );
   cfit->SaveAs( (dirName + canvasName + ".png").c_str() );
@@ -1197,7 +1295,9 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
 //==========================================================================================
 
 
-void drawPlotOnlyMC(vector<TH1F*> &hmcVector, const vector<string> &legEntryName, const string& MCSampleName, const string& xAxisName, const string& yAxisName, const string& canvasName, const string &dirName, const string &canvasTitle = "") {
+void drawPlotOnlyMC(vector<TH1F*> &hmcVector, const vector<string> &legEntryName, const string& MCSampleName, const string& xAxisName, const string& yAxisName, const string& canvasName, const string &dirName, const string &canvasTitle = "", const Double_t miny = -1.0, const Double_t maxy = -1.0) {
+
+  TH1::SetDefaultSumw2();            //all the following histograms will automatically call TH1::Sumw2()
 
   // to draw the canvas title in the frame, we actually use TH1::GetTitle, setting it to canvasTitle argument passed to this function.
   // after saving the canvas, we set the histogram title to its original value
@@ -1233,14 +1333,30 @@ void drawPlotOnlyMC(vector<TH1F*> &hmcVector, const vector<string> &legEntryName
 
   } 
 
+  maximumYaxisValue *= 1.02; // slightly increase the y scale for maximum
+  minimumYaxisValue *= 0.98; // slightly decrease the y scale for minimum
+
   for (UInt_t i = 0; i < hmcVector.size(); i++) {
 
     hmcVector[i]->SetStats(0);
     hmcVector[i]->SetLineColor(histColor[i]);
     if ( i == 0 ) {
-      hmcVector[i]->SetMaximum(maximumYaxisValue * 1.02);  // slightly increase the y scale for maximum
-      hmcVector[i]->SetMinimum(minimumYaxisValue * 0.98);  // slightly decrease the y scale for minimum
+      hmcVector[i]->SetMaximum(maximumYaxisValue);
+      hmcVector[i]->SetMinimum(minimumYaxisValue);
       if (hmcVector[i]->GetMinimum() < 0.02) hmcVector[i]->SetMinimum(0.0);
+      if (miny > 0.0) hmcVector[i]->SetMinimum(miny);
+      if (maxy > 0.0) hmcVector[i]->SetMaximum(maxy);
+      if (FIT_2SIDE_CB) {
+	if (canvasName == "modeMCstudy") {
+	  hmcVector[i]->SetMinimum(0.96);
+	  hmcVector[i]->SetMaximum(maximumYaxisValue);
+	} else if (canvasName == "sigmaMCstudy") {
+	  hmcVector[i]->SetMinimum(0.0);
+	  hmcVector[i]->SetMaximum(0.15);
+	}
+      }
+      // if (canvasName == "modeMCstudy") hmcVector[i]->SetMinimum(0.9);
+      // else if (canvasName == "sigmaMCstudy") hmcVector[i]->SetMaximum(0.2);
       hmcVector[i]->Draw("HE");
       hOriginalTitle = string(hmcVector[i]->GetTitle());
       hmcVector[i]->SetTitle(canvasTitle.c_str());
@@ -1319,6 +1435,8 @@ void  plotHistogramsFromFile(const string &dataSampleName, const string &MCSampl
 		      const string& hNameToTriggerOptions = "") {
   */
 
+  TH1::SetDefaultSumw2();            //all the following histograms will automatically call TH1::Sumw2()  
+
   string fileNameData = dirName + "EoverP_" + dataSampleName + ".root";
   string fileNameMC = dirName + "EoverP_" + MCSampleName + ".root";
 
@@ -1332,6 +1450,9 @@ void  plotHistogramsFromFile(const string &dataSampleName, const string &MCSampl
   hNameList.push_back("hR9_hotE");
   hNameList.push_back("hPt_lowE");
   hNameList.push_back("hPt_hotE");
+  hNameList.push_back("hElePt");
+  hNameList.push_back("hEleEcorr");
+  hNameList.push_back("hEleEraw");
   vector<string> xAxisName;
   xAxisName.push_back("electron #sigma_{i#eta i#eta}");
   xAxisName.push_back("electron #sigma_{i#eta i#eta}");
@@ -1339,6 +1460,9 @@ void  plotHistogramsFromFile(const string &dataSampleName, const string &MCSampl
   xAxisName.push_back("electron R9");
   xAxisName.push_back("electron p_{T} [GeV]");
   xAxisName.push_back("electron p_{T} [GeV]");
+  xAxisName.push_back("electron p_{T} [GeV]");
+  xAxisName.push_back("electron corrected energy [GeV]");
+  xAxisName.push_back("electron raw energy [GeV]");
   vector<string> canvasName;
   canvasName.push_back("sigmaIetaIeta_lowE");
   canvasName.push_back("sigmaIetaIeta_hotE");
@@ -1346,25 +1470,41 @@ void  plotHistogramsFromFile(const string &dataSampleName, const string &MCSampl
   canvasName.push_back("R9_hotE");
   canvasName.push_back("pT_lowE");
   canvasName.push_back("pT_hotE");
+  canvasName.push_back("pT");
+  canvasName.push_back("corrE");
+  canvasName.push_back("rawE");
   vector<string> canvasTitle;
+
+  string whichEnergy = "";
+  if (USE_RAWE) whichEnergy = "raw";
+  else whichEnergy = "corrected";
+
   if (USE_E) {
-    canvasTitle.push_back("100 < E < 225 GeV");
-    canvasTitle.push_back("350 < E < 450 GeV");
-    canvasTitle.push_back("100 < E < 225 GeV");
-    canvasTitle.push_back("350 < E < 450 GeV");
-    canvasTitle.push_back("100 < E < 225 GeV");
-    canvasTitle.push_back("350 < E < 450 GeV");
+    canvasTitle.push_back("100 < " +  whichEnergy + " E [GeV] < 225");
+    canvasTitle.push_back("350 < " +  whichEnergy + " E [GeV] < 450");
+    canvasTitle.push_back("100 < " +  whichEnergy + " E [GeV] < 225");
+    canvasTitle.push_back("350 < " +  whichEnergy + " E [GeV] < 450");
+    canvasTitle.push_back("100 < " +  whichEnergy + " E [GeV] < 225");
+    canvasTitle.push_back("350 < " +  whichEnergy + " E [GeV] < 450");
+    canvasTitle.push_back("");
+    canvasTitle.push_back("");
+    canvasTitle.push_back("");
   } else {
-    canvasTitle.push_back("100 < E_{T} < 225 GeV");
-    canvasTitle.push_back("350 < E_{T} < 450 GeV");
-    canvasTitle.push_back("100 < E_{T} < 225 GeV");
-    canvasTitle.push_back("350 < E_{T} < 450 GeV");
-    canvasTitle.push_back("100 < E_{T} < 225 GeV");
-    canvasTitle.push_back("350 < E_{T} < 450 GeV");
+    canvasTitle.push_back("100 < " +  whichEnergy + " E_{T} [GeV] < 225");
+    canvasTitle.push_back("325 < " +  whichEnergy + " E_{T} [GeV] < 425");
+    canvasTitle.push_back("100 < " +  whichEnergy + " E_{T} [GeV] < 225");
+    canvasTitle.push_back("325 < " +  whichEnergy + " E_{T} [GeV] < 425");
+    canvasTitle.push_back("100 < " +  whichEnergy + " E_{T} [GeV] < 225");
+    canvasTitle.push_back("325 < " +  whichEnergy + " E_{T} [GeV] < 425");
+    canvasTitle.push_back("");
+    canvasTitle.push_back("");
+    canvasTitle.push_back("");
   }    
 
   TH1F* hData = NULL;
   TH1F* hMC = NULL;
+
+  cout << "check here" << endl;
 
   TFile* fData = TFile::Open(fileNameData.c_str(),"READ");
   if (!fData || !fData->IsOpen()) {
@@ -1408,9 +1548,9 @@ void  plotHistogramsFromFile(const string &dataSampleName, const string &MCSampl
     // to compare, normalize MC to same area
     // since no weights are applied, I can use GetEntries() to get integral (this includes underflow and overflow events)
     hData->Sumw2();
-    hData->Scale(1./hData->GetEntries());
+    hData->Scale(1./hData->Integral());
     hMC->Sumw2();
-    hMC->Scale(1./hMC->GetEntries());
+    hMC->Scale(1./hMC->Integral());
     drawPlotDataMC(hData, hMC, MCSampleName, xAxisName[i], "a.u.",canvasName[i],dirName,canvasTitle[i],"distributions",1);
     //////////////////////////
 
@@ -1421,37 +1561,44 @@ void  plotHistogramsFromFile(const string &dataSampleName, const string &MCSampl
 
 //=================================================================================
 
-void plotFromFit(const string &dataSampleName, const string &MCSampleName, const vector<Float_t> &corrEnergybinEdges, const string & dirName) {
+void plotFromFit(const string &dataSampleName, const string &MCSampleName, const vector<Float_t> &energybinEdges, const string & dirName) {
+
+  TH1::SetDefaultSumw2();            //all the following histograms will automatically call TH1::Sumw2() 
   
   string xAxisName = "";
-  if (USE_E) xAxisName = "corrected E [GeV]";
-  else xAxisName = "corrected E_{T} [GeV]";
 
-  Int_t nCorrEnergyBins = corrEnergybinEdges.size() -1;
+  string whichEnergy = "";
+  if (USE_RAWE) whichEnergy = "raw";
+  else whichEnergy = "corrected";
 
-  TH1F* hPeakEoverPdata = new TH1F("hPeakEoverPdata","",nCorrEnergyBins,corrEnergybinEdges.data());
-  TH1F* hSigmaEoverPdata = new TH1F("hSigmaEoverPdata","",nCorrEnergyBins,corrEnergybinEdges.data());
-  TH1F* hPeakEoverPmc = new TH1F("hPeakEoverPmc","",nCorrEnergyBins,corrEnergybinEdges.data());
-  TH1F* hSigmaEoverPmc = new TH1F("hSigmaEoverPmc","",nCorrEnergyBins,corrEnergybinEdges.data());
+  if (USE_E) xAxisName = whichEnergy + " E [GeV]";
+  else xAxisName = whichEnergy + " E_{T} [GeV]";
 
-  TH1F* hPeakShift_MCdata = new TH1F("hPeakShift_MCdata","",nCorrEnergyBins,corrEnergybinEdges.data()); 
-  TH1F* hScaleFactor_MCdata = new TH1F("hScaleFactor_MCdata","",nCorrEnergyBins,corrEnergybinEdges.data()); 
+  Int_t nEnergyBins = energybinEdges.size() -1;
+
+  TH1F* hPeakEoverPdata = new TH1F("hPeakEoverPdata","",nEnergyBins,energybinEdges.data());
+  TH1F* hSigmaEoverPdata = new TH1F("hSigmaEoverPdata","",nEnergyBins,energybinEdges.data());
+  TH1F* hPeakEoverPmc = new TH1F("hPeakEoverPmc","",nEnergyBins,energybinEdges.data());
+  TH1F* hSigmaEoverPmc = new TH1F("hSigmaEoverPmc","",nEnergyBins,energybinEdges.data());
+
+  TH1F* hPeakShift_MCdata = new TH1F("hPeakShift_MCdata","",nEnergyBins,energybinEdges.data()); 
+  TH1F* hScaleFactor_MCdata = new TH1F("hScaleFactor_MCdata","",nEnergyBins,energybinEdges.data()); 
 
   // valuse used to define the range when getting peak position from TH1::GetMean()
   double_t lowRangeValueForMean = 0.8; 
   Double_t upRangeValueForMean = 1.2; 
   string titleForPlotsWithMeanInRange = string(Form("peak from TH1F::GetMean() in [%1.1f, %1.1f]",lowRangeValueForMean,upRangeValueForMean));
 
-  TH1F* hPeakEoverPdata_meanInRange = new TH1F("hPeakEoverPdata_meanInRange","",nCorrEnergyBins,corrEnergybinEdges.data());
-  TH1F* hPeakEoverPmc_meanInRange = new TH1F("hPeakEoverPmc_meanInRange","",nCorrEnergyBins,corrEnergybinEdges.data());
+  TH1F* hPeakEoverPdata_meanInRange = new TH1F("hPeakEoverPdata_meanInRange","",nEnergyBins,energybinEdges.data());
+  TH1F* hPeakEoverPmc_meanInRange = new TH1F("hPeakEoverPmc_meanInRange","",nEnergyBins,energybinEdges.data());
 
-  plotDistribution(dataSampleName, corrEnergybinEdges, hPeakEoverPdata, hSigmaEoverPdata, "EoverP",dirName, 
+  plotDistribution(dataSampleName, energybinEdges, hPeakEoverPdata, hSigmaEoverPdata, "EoverP",dirName, 
 		   hPeakEoverPdata_meanInRange,lowRangeValueForMean, upRangeValueForMean, hPeakShift_MCdata, hScaleFactor_MCdata);
-  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakEoverPmc, hSigmaEoverPmc, "EoverP",dirName,
+  plotDistribution(MCSampleName, energybinEdges, hPeakEoverPmc, hSigmaEoverPmc, "EoverP",dirName,
 		   hPeakEoverPmc_meanInRange,lowRangeValueForMean, upRangeValueForMean);
 
   TH1F* hPeakEoverPdata_templateFit = NULL;
-  if (hPeakShift_MCdata && hScaleFactor_MCdata) hPeakEoverPdata_templateFit = new TH1F("hPeakEoverPdata_templateFit","",nCorrEnergyBins,corrEnergybinEdges.data());
+  if (hPeakShift_MCdata && hScaleFactor_MCdata) hPeakEoverPdata_templateFit = new TH1F("hPeakEoverPdata_templateFit","",nEnergyBins,energybinEdges.data());
   if (hPeakEoverPdata_templateFit) {
     // the following is because we get peak of data distribution from template by taking MC, dividing by scale factor in each bin and adding the shift
     // this is because the template acts by changing the x in MC, x_MC, to x in data, x_D in the following way:
@@ -1493,22 +1640,22 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
 
   // MC only study
 
-  TH1F* hPeakEcorrOverEtrue = new TH1F("hPeakEcorrOverEtrue","",nCorrEnergyBins,corrEnergybinEdges.data());
-  TH1F* hSigmaEcorrOverEtrue = new TH1F("hSigmaEcorrOverEtrue","",nCorrEnergyBins,corrEnergybinEdges.data());
-  TH1F* hPeakErawOverEtrue = new TH1F("hPeakErawOverEtrue","",nCorrEnergyBins,corrEnergybinEdges.data());
-  TH1F* hSigmaErawOverEtrue = new TH1F("hSigmaErawOverEtrue","",nCorrEnergyBins,corrEnergybinEdges.data());
-  TH1F* hPeakPtrackOverEtrue = new TH1F("hPeakPtrackOverEtrue","",nCorrEnergyBins,corrEnergybinEdges.data());
-  TH1F* hSigmaPtrackOverEtrue = new TH1F("hSigmaPtrackOverEtrue","",nCorrEnergyBins,corrEnergybinEdges.data());
+  TH1F* hPeakEcorrOverEtrue = new TH1F("hPeakEcorrOverEtrue","",nEnergyBins,energybinEdges.data());
+  TH1F* hSigmaEcorrOverEtrue = new TH1F("hSigmaEcorrOverEtrue","",nEnergyBins,energybinEdges.data());
+  TH1F* hPeakErawOverEtrue = new TH1F("hPeakErawOverEtrue","",nEnergyBins,energybinEdges.data());
+  TH1F* hSigmaErawOverEtrue = new TH1F("hSigmaErawOverEtrue","",nEnergyBins,energybinEdges.data());
+  TH1F* hPeakPtrackOverEtrue = new TH1F("hPeakPtrackOverEtrue","",nEnergyBins,energybinEdges.data());
+  TH1F* hSigmaPtrackOverEtrue = new TH1F("hSigmaPtrackOverEtrue","",nEnergyBins,energybinEdges.data());
 
-  TH1F* hPeakEcorrOverEtrue_meanInRange = new TH1F("hPeakEcorrOverEtrue_meanInRange","",nCorrEnergyBins,corrEnergybinEdges.data());
-  TH1F* hPeakErawOverEtrue_meanInRange = new TH1F("hPeakErawOverEtrue_meanInRange","",nCorrEnergyBins,corrEnergybinEdges.data());
-  TH1F* hPeakPtrackOverEtrue_meanInRange = new TH1F("hPeakPtrackOverEtrue_meanInRange","",nCorrEnergyBins,corrEnergybinEdges.data());
+  TH1F* hPeakEcorrOverEtrue_meanInRange = new TH1F("hPeakEcorrOverEtrue_meanInRange","",nEnergyBins,energybinEdges.data());
+  TH1F* hPeakErawOverEtrue_meanInRange = new TH1F("hPeakErawOverEtrue_meanInRange","",nEnergyBins,energybinEdges.data());
+  TH1F* hPeakPtrackOverEtrue_meanInRange = new TH1F("hPeakPtrackOverEtrue_meanInRange","",nEnergyBins,energybinEdges.data());
 
-  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakEcorrOverEtrue, hSigmaEcorrOverEtrue, "EcorrOverEtrue",dirName, 
+  plotDistribution(MCSampleName, energybinEdges, hPeakEcorrOverEtrue, hSigmaEcorrOverEtrue, "EcorrOverEtrue",dirName, 
 		   hPeakEcorrOverEtrue_meanInRange,lowRangeValueForMean, upRangeValueForMean);
-  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakErawOverEtrue, hSigmaErawOverEtrue, "ErawOverEtrue",dirName, 
+  plotDistribution(MCSampleName, energybinEdges, hPeakErawOverEtrue, hSigmaErawOverEtrue, "ErawOverEtrue",dirName, 
 		   hPeakErawOverEtrue_meanInRange,lowRangeValueForMean, upRangeValueForMean);
-  plotDistribution(MCSampleName, corrEnergybinEdges, hPeakPtrackOverEtrue, hSigmaPtrackOverEtrue, "PtrackOverEtrue",dirName, 
+  plotDistribution(MCSampleName, energybinEdges, hPeakPtrackOverEtrue, hSigmaPtrackOverEtrue, "PtrackOverEtrue",dirName, 
 		   hPeakPtrackOverEtrue_meanInRange,lowRangeValueForMean, upRangeValueForMean);
 
   vector<TH1F*> hPeakVectorMC;
@@ -1531,6 +1678,7 @@ void plotFromFit(const string &dataSampleName, const string &MCSampleName, const
   legEntryName.push_back("E_{raw}/E_{true}");
   legEntryName.push_back("P_{track}/E_{true}");
 
+  xAxisName = "true E [GeV]";
   drawPlotOnlyMC(hPeakVectorMC, legEntryName, MCSampleName, xAxisName, "peak position from fit", "modeMCstudy",dirName,"fit with Crystall Ball"); 
   drawPlotOnlyMC(hSigmaVectorMC, legEntryName, MCSampleName, xAxisName, "#sigma of distribution from fit", "sigmaMCstudy",dirName, "fit with Crystall Ball"); 
 
@@ -1547,6 +1695,7 @@ Int_t main(Int_t argc, char* argv[]) {
   Int_t doAll_flag = 1;
   Int_t doLoop_flag = 1;
   Int_t doLoopMC_flag = 1;
+  Int_t doLoopData_flag = 1; 
   Int_t doPlot_flag = 1;
 
   string dirName = "";   // will be a path like "plot/<name>/" . Note the ending "/" 
@@ -1561,10 +1710,14 @@ Int_t main(Int_t argc, char* argv[]) {
 	cout << "Passing option -nl: skip Loop on ntuples" << endl;
 	doLoop_flag = 0;  // -nl --> no Loop
 	doLoopMC_flag = 0;  // -nl --> no Loop, so it implies no loop on MC
+	doLoopData_flag = 0;  // -nl --> no Loop, so it implies no loop on data
 	doAll_flag = 0;
       }	else if (thisArgument == "-nlMC") {
 	cout << "Passing option -nlMC: skip Loop on MC ntuples (but do loop for data)." << endl; // Useful when new data are available but MC didn't change.
 	doLoopMC_flag = 0; 
+      } else if (thisArgument == "-nldata") {
+	cout << "Passing option -nldata: skip Loop on data ntuples (but do loop for MC)." << endl; // Useful when new data are available but MC didn't change.
+	doLoopData_flag = 0; 
       } else if (thisArgument == "-np") {
 	cout << "Passing option -np: skip creation of plots" << endl;
 	doPlot_flag = 0;  // -np --> no plots
@@ -1593,41 +1746,41 @@ Int_t main(Int_t argc, char* argv[]) {
   sampleName.push_back("DATA");
   sampleName.push_back("WJetsToLNu");
 
-  vector<Float_t> corrEnergybinEdges;
+  vector<Float_t> energybinEdges;
   // this binning looks ok
-  corrEnergybinEdges.push_back(25.0);
-  corrEnergybinEdges.push_back(50.0);
-  corrEnergybinEdges.push_back(75.0);
-  corrEnergybinEdges.push_back(100.0);
-  corrEnergybinEdges.push_back(125.0);
-  corrEnergybinEdges.push_back(175.0);
-  corrEnergybinEdges.push_back(225.0);
+  energybinEdges.push_back(25.0);
+  energybinEdges.push_back(50.0);
+  energybinEdges.push_back(75.0);
+  energybinEdges.push_back(100.0);
+  energybinEdges.push_back(125.0);
+  energybinEdges.push_back(175.0);
+  energybinEdges.push_back(225.0);
   if (USE_E) {
-    corrEnergybinEdges.push_back(275.0);
-    corrEnergybinEdges.push_back(350.0);
-    corrEnergybinEdges.push_back(450.0);
-    corrEnergybinEdges.push_back(650.0);
-    corrEnergybinEdges.push_back(900.0);
+    energybinEdges.push_back(275.0);
+    energybinEdges.push_back(350.0);
+    energybinEdges.push_back(450.0);
+    energybinEdges.push_back(650.0);
+    energybinEdges.push_back(900.0);
   } else {
-    corrEnergybinEdges.push_back(275.0);
-    //corrEnergybinEdges.push_back(350.0);
-    corrEnergybinEdges.push_back(325.0);
-    corrEnergybinEdges.push_back(425.0);
-    corrEnergybinEdges.push_back(600.0);
-    corrEnergybinEdges.push_back(900.0);
+    energybinEdges.push_back(275.0);
+    //energybinEdges.push_back(350.0);
+    energybinEdges.push_back(325.0);
+    energybinEdges.push_back(425.0);
+    energybinEdges.push_back(600.0);
+    energybinEdges.push_back(900.0);
   }    
 
-  // corrEnergybinEdges.push_back(25.0);
-  // corrEnergybinEdges.push_back(50.0);
-  // corrEnergybinEdges.push_back(75.0);
-  // corrEnergybinEdges.push_back(100.0);
-  // corrEnergybinEdges.push_back(125.0);
-  // corrEnergybinEdges.push_back(150.0);
-  // corrEnergybinEdges.push_back(200.0);
-  // corrEnergybinEdges.push_back(250.0);
-  // corrEnergybinEdges.push_back(325.0);
-  // corrEnergybinEdges.push_back(450.0);
-  // corrEnergybinEdges.push_back(900.0);
+  // energybinEdges.push_back(25.0);
+  // energybinEdges.push_back(50.0);
+  // energybinEdges.push_back(75.0);
+  // energybinEdges.push_back(100.0);
+  // energybinEdges.push_back(125.0);
+  // energybinEdges.push_back(150.0);
+  // energybinEdges.push_back(200.0);
+  // energybinEdges.push_back(250.0);
+  // energybinEdges.push_back(325.0);
+  // energybinEdges.push_back(450.0);
+  // energybinEdges.push_back(900.0);
 
 
   if(doAll_flag || doLoop_flag) {
@@ -1635,6 +1788,7 @@ Int_t main(Int_t argc, char* argv[]) {
     for (UInt_t i = 0; i < sampleName.size(); i++) {
     
       if (!doLoopMC_flag && (sampleName[i] != "DATA")) continue;
+      if (!doLoopData_flag && (sampleName[i] == "DATA")) continue;
 
       // create chain                                                                                                         
     
@@ -1649,7 +1803,7 @@ Int_t main(Int_t argc, char* argv[]) {
       }
 
       EoverP tree(chain);
-      tree.Loop(sampleName[i], corrEnergybinEdges, dirName);
+      tree.Loop(sampleName[i], energybinEdges, dirName);
 
       delete chain;
       delete chFriend;
@@ -1658,19 +1812,19 @@ Int_t main(Int_t argc, char* argv[]) {
 
   }
 
+  //  cout << "check" << endl;
 
   if(doAll_flag || doPlot_flag) {
 
-    plotFromFit(sampleName[0],sampleName[1], corrEnergybinEdges, dirName);
+    plotFromFit(sampleName[0],sampleName[1], energybinEdges, dirName);
+    plotHistogramsFromFile(sampleName[0],sampleName[1], dirName);
 
   }
 
   // plotEoverP(sampleName[0],sampleName[1],"hMeanEoverP","< E/P >");
   // plotEoverP(sampleName[0],sampleName[1],"hModeEoverP"," mode of E/P");
-  // plotEoverPdistribution(sampleName[0], corrEnergybinEdges);
-  // plotEoverPdistribution(sampleName[1], corrEnergybinEdges);
-
-  plotHistogramsFromFile(sampleName[0],sampleName[1], dirName);
+  // plotEoverPdistribution(sampleName[0], energybinEdges);
+  // plotEoverPdistribution(sampleName[1], energybinEdges);
 
   return 0;
 
