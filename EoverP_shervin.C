@@ -19,6 +19,7 @@
 #include <TKey.h>
 #include <TLatex.h>
 #include <TLegend.h>
+#include <TLegendEntry.h>
 #include <TLorentzVector.h>
 #include <TMath.h>
 #include <TMatrixDSym.h>
@@ -27,6 +28,7 @@
 #include <TPaletteAxis.h>
 #include <TPaveStats.h>
 #include <TPaveText.h>
+#include <TProfile.h>
 #include <TTreeIndex.h>
 #include <TStyle.h>
 #include <TVector3.h>
@@ -55,6 +57,9 @@
 #define USE_RAWE 0 // when 1, use raw SC energy instead of regression corrected ECAL energy
 #define DO_TEMPLATE_FIT 0  // when 0 will not do template fit
 #define READ_FROM_LOCAL 1 // I skimmed and copied Shervin's ntuples. If the selection is the same as or tighter than the skim, better to read the skimmed version
+#define USE_P_AT_VTX 1  // choose p at vtx or mode of p (two variables in Sehrvin's ntuples
+#define BIN_P 0 // decide to bin in P or E (or Eraw depending on other defines)
+#define ELE_ETA_MAX 1.47
 
 using namespace std;
 
@@ -451,9 +456,9 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
 
    TH1::SetDefaultSumw2();            //all the following histograms will automatically call TH1::Sumw2() 
 
-   // variables to use branch in other chain (when reading data, we have to different samples and i want those events common in both)
+   // variables to use branch in other chain (when reading data, we have to different samples and I want those events common in both)
    Float_t PtEle_other[3], etaEle_other[3], R9Ele_other[3]; // for selection
-   Float_t energySCEle_must_regrCorr_ele_other[3], rawEnergySCEle_must_other[3], pAtVtxGsfEle_other[3]; // for analysis
+   Float_t energySCEle_must_regrCorr_ele_other[3], rawEnergySCEle_must_other[3], pGsfEle_other[3]; // for analysis
    Int_t runNumber_other, lumiBlock_other;
    ULong64_t eventNumber_other;
    TChain* otherDataChain = NULL;
@@ -469,7 +474,8 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
      otherDataChain->SetBranchAddress("R9Ele",R9Ele_other);
      otherDataChain->SetBranchAddress("energySCEle_must_regrCorr_ele",energySCEle_must_regrCorr_ele_other);
      otherDataChain->SetBranchAddress("rawEnergySCEle_must",rawEnergySCEle_must_other);
-     otherDataChain->SetBranchAddress("pAtVtxGsfEle",pAtVtxGsfEle_other);
+     if (USE_P_AT_VTX) otherDataChain->SetBranchAddress("pAtVtxGsfEle",pGsfEle_other);
+     else otherDataChain->SetBranchAddress("pModeGsfEle",pGsfEle_other);
      fChain->AddFriend(otherDataChain);
    }
 
@@ -502,6 +508,8 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
    TH1F* hElePt = new TH1F("hElePt","",200,0,1000);
    TH1F* hEleEcorr = new TH1F("hEleEcorr","",200,0,1000);
    TH1F* hEleEraw = new TH1F("hEleEraw","",200,0,1000);
+   TH1F* hpAtVtxGsfEle = new TH1F("hpAtVtxGsfEle","",45,0,900);
+   TH1F* hpModeGsfEle = new TH1F("hpModeGsfEle","",45,0,900);
 
    for (Int_t i = 0; i < nEnergyBins; i++) {
      hEoverP_energyBin[i] = new TH1F(Form("hEoverP_energyBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",200,0.05,2.05);
@@ -516,9 +524,6 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
    }
 
    TH1F* hEoP_template = new TH1F("hEoP_template","template",200,0.05,2.05);  // a template for E/P in the whole energy spectrum (not used at the moment)
-
-   // TH1F* hEcorrWgtOverMf = NULL;
-   // if () hEcorrWgtOverMf new TH1F("hEcorrWgtOverMf","",80,0.81,1.21);
 
    vector<Double_t> energyBinTH2 = {25.,50.,75.,100.,125.,175.,225., 275.,350., 450.,550.,650.,800.,1000.};
    Int_t NbinsTH2 = energyBinTH2.size() - 1;
@@ -550,6 +555,8 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
    Long64_t finalEntries = 0;
    Long64_t entriesWithEnergyLowerThanFirstBin = 0;
    Long64_t entriesWithEnergyHigherThanLastBin = 0;
+   Long64_t entriesWithPLowerThanFirstBin = 0;
+   Long64_t entriesWithPHigherThanLastBin = 0;
 
    for (Long64_t jentry=0; jentry<nentries;jentry++) {
    // for (Long64_t jentry=0; jentry<TreeIndex_fChain->GetN();jentry++) {
@@ -568,8 +575,8 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
 
       // if (met_pt < 50) continue;
       // if (!( nEle10V == 1 && nEle40T == 1) ) continue;
-      if ( !(PtEle[0] > 40 && fabs(etaEle[0]) < 1.0) ) continue;
-      if ( otherDataChain != NULL && !(PtEle_other[0] > 40 && fabs(etaEle_other[0]) < 1.0) ) continue;
+      if ( !(PtEle[0] > 40 && fabs(etaEle[0]) < ELE_ETA_MAX) ) continue;
+      if ( otherDataChain != NULL && !(PtEle_other[0] > 40 && fabs(etaEle_other[0]) < ELE_ETA_MAX) ) continue;
 
       Double_t energyToUse = -1.0;
       if (USE_RAWE) energyToUse = rawEnergySCEle_must[0];
@@ -601,15 +608,25 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
       hElePt->Fill(PtEle[0]);
       hEleEcorr->Fill(energySCEle_must_regrCorr_ele[0]);  
       hEleEraw->Fill(rawEnergySCEle_must[0]); 
+      hpAtVtxGsfEle->Fill(pAtVtxGsfEle[0]);
+      hpModeGsfEle->Fill(pModeGsfEle[0]);
 
       Double_t EoverP_toUse = -1.0;
-      if (USE_RAWE) EoverP_toUse = rawEnergySCEle_must[0] / pAtVtxGsfEle[0];
-      else EoverP_toUse = energySCEle_must_regrCorr_ele[0] / pAtVtxGsfEle[0];
+      Double_t pToUse = 0.0;
+      if (USE_P_AT_VTX) pToUse = pAtVtxGsfEle[0];
+      else pToUse = pModeGsfEle[0];
+
+      Double_t varToUseForBin = -1.0;
+      if (BIN_P) varToUseForBin = pToUse;
+      else varToUseForBin = energyToUse;      
+
+      EoverP_toUse = energyToUse / pToUse;
 
       hEoP_template->Fill(EoverP_toUse);
 
-      // look for the bin in the LepGood_correctedEcalEnergy variable      
-      Int_t bin = getBinNumber(energyToUse,energybinEdges);  // this function returns negative value if bin not found
+      // look for the bin in the proper variable      
+      Int_t bin = getBinNumber(varToUseForBin,energybinEdges);  // this function returns negative value if bin not found
+      //Int_t bin = (BIN_P ? getBinNumber(pToUse,energybinEdges) : getBinNumber(energyToUse,energybinEdges));  // this function returns negative value if bin not found
       
       if (bin >= 0) {
 
@@ -617,26 +634,30 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
 
 	//sum the energy to the bin content in the bin it belongs to (at the end we will divide by the number of entries in each bin)
 	// using bin+1 because the histogram bin number goes from 1 to number of bins, while "bin" variable starts from 0
-	hMeanEnergyInEnergyBin->SetBinContent(bin+1, energyToUse + hMeanEnergyInEnergyBin->GetBinContent(bin+1));  
+	hMeanEnergyInEnergyBin->SetBinContent(bin+1, varToUseForBin + hMeanEnergyInEnergyBin->GetBinContent(bin+1));  
 
       } else if (bin == -1) {
 	// fill last bin with overflows to gain in statistics
 	hEoverP_energyBin[nEnergyBins-1]->Fill(EoverP_toUse);
 	// however, the mean is done without them, because overflows can be far outlier and bias the mean
-	//hMeanEnergyInEnergyBin->SetBinContent(nEnergyBins, energyToUse + hMeanEnergyInEnergyBin->GetBinContent(nEnergyBins));
+	//hMeanEnergyInEnergyBin->SetBinContent(nEnergyBins, varToUseForBin + hMeanEnergyInEnergyBin->GetBinContent(nEnergyBins));
       }
 
-      h2EnergyPtrack->Fill(pAtVtxGsfEle[0],energyToUse);
+      h2EnergyPtrack->Fill(pToUse,energyToUse);
 
       finalEntries++;
       if (energyToUse < energybinEdges[0]) entriesWithEnergyLowerThanFirstBin++;
       if (energyToUse > energybinEdges.back()) entriesWithEnergyHigherThanLastBin++;
+      if (energyToUse < energybinEdges[0]) entriesWithPLowerThanFirstBin++;
+      if (energyToUse > energybinEdges.back()) entriesWithPHigherThanLastBin++;
 
    }  // end of loop on entries
 
    cout << "Loop ended: final entries = " << finalEntries << endl;
    cout << "Entries with E < " << energybinEdges[0] << " = " << entriesWithEnergyLowerThanFirstBin << endl;
+   cout << "Entries with P < " << energybinEdges[0] << " = " << entriesWithPLowerThanFirstBin << endl;
    cout << "Entries with E > " << energybinEdges.back() << " = " << entriesWithEnergyHigherThanLastBin << endl;
+   cout << "Entries with P > " << energybinEdges.back() << " = " << entriesWithPHigherThanLastBin << endl;
    cout << "hEoP_template->GetEntries() = " << hEoP_template->GetEntries() << endl;
    cout << "hEoP_template->Integral() = " << hEoP_template->Integral() << endl;
 
@@ -651,11 +672,10 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
      hEoverP_energyBin[i]->GetYaxis()->SetTitleSize(0.055);
      hEoverP_energyBin[i]->GetYaxis()->SetTitleOffset(0.8);
 
-     // remember that the last bin is somewht special, because it holds the overflows
+     // remember that the last bin is somewhat special, because it holds the overflows
      // however, the mean is done without them, because overflows can be far outlier and bias the mean
-     if (i < (nEnergyBins-1)) hMeanEnergyInEnergyBin->SetBinContent(i+1, hMeanEnergyInEnergyBin->GetBinContent(i+1)/hEoverP_energyBin[i]->GetEntries());
-     //     else hMeanEnergyInEnergyBin->SetBinContent(i+1, hMeanEnergyInEnergyBin->GetBinContent(i+1)/hEoverP_energyBin[i]->GetEntries() );
-
+     hMeanEnergyInEnergyBin->SetBinContent(i+1, hMeanEnergyInEnergyBin->GetBinContent(i+1)/hEoverP_energyBin[i]->GetEntries());
+     
    }
 
    string whichEnergy = "";
@@ -665,13 +685,18 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
    if (USE_E) {
      hMeanEnergyInEnergyBin->GetXaxis()->SetTitle((whichEnergy + " E [GeV]").c_str());
      hMeanEnergyInEnergyBin->GetYaxis()->SetTitle("mean E [GeV]");
-     h2EnergyPtrack->GetYaxis()->SetTitle((whichEnergy + " E [GeV]").c_str());
-   
+     h2EnergyPtrack->GetYaxis()->SetTitle((whichEnergy + " E [GeV]").c_str());  //the lin below can use P, but this is E (because it is E vs P)
    } else {
      hMeanEnergyInEnergyBin->GetXaxis()->SetTitle((whichEnergy + " E_{T} [GeV]").c_str());
      hMeanEnergyInEnergyBin->GetYaxis()->SetTitle("mean E_{T} [GeV]");
      h2EnergyPtrack->GetYaxis()->SetTitle((whichEnergy + " E_{T} [GeV]").c_str());
    }
+   if (BIN_P) {
+     hMeanEnergyInEnergyBin->GetXaxis()->SetTitle("P [GeV]");
+     hMeanEnergyInEnergyBin->GetYaxis()->SetTitle("mean P [GeV]");
+   }
+
+
    hMeanEnergyInEnergyBin->GetXaxis()->SetTitleSize(0.06);
    hMeanEnergyInEnergyBin->GetXaxis()->SetTitleOffset(0.8);
    hMeanEnergyInEnergyBin->GetYaxis()->SetTitleSize(0.055);
@@ -797,7 +822,7 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &energybin
 
     //    hist->SetStats(0);
     gStyle->SetOptStat(10);
-    gStyle->SetOptFit(0112);
+    gStyle->SetOptFit(112);
     hist->Draw("HE");
     if (sampleName == "DATA" || sampleName == "DATA_w") {
       if (energybinEdges[i] > 449.9) hist->Rebin(5); 
@@ -1026,10 +1051,12 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &energybin
     leg->Draw();
     leg->SetMargin(0.3); 
     leg->SetBorderSize(0);
+    leg->SetFillStyle(0);
 
     legFitFunction->Draw();
     legFitFunction->SetMargin(0.3); 
     legFitFunction->SetBorderSize(0);
+    legFitFunction->SetFillStyle(0);
 
     c->Update();
     // box for fit with Crystal Ball
@@ -1090,7 +1117,12 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &energybin
     else whichEnergy = "corrected E";
     if ((sampleName != "DATA") && (hNameID != "EoverP")) whichEnergy = "true E";
 
-    if (USE_E) {      
+    if (BIN_P) {
+      whichEnergy = "track P";
+      hist->SetTitle(Form("%1.0f < %s [GeV] < %1.0f",energybinEdges[i],whichEnergy.c_str(),energybinEdges[i+1]));
+      c->SaveAs(Form("%s%sdistribution_P%1.0fTo%1.0f_%s.pdf",dirName.c_str(),hNameID.c_str(),energybinEdges[i],energybinEdges[i+1],sampleName.c_str()));
+      c->SaveAs(Form("%s%sdistribution_P%1.0fTo%1.0f_%s.png",dirName.c_str(),hNameID.c_str(),energybinEdges[i],energybinEdges[i+1],sampleName.c_str()));
+    } else if (USE_E) {      
       hist->SetTitle(Form("%1.0f < %s [GeV] < %1.0f",energybinEdges[i],whichEnergy.c_str(),energybinEdges[i+1]));
       c->SaveAs(Form("%s%sdistribution_E%1.0fTo%1.0f_%s.pdf",dirName.c_str(),hNameID.c_str(),energybinEdges[i],energybinEdges[i+1],sampleName.c_str()));
       c->SaveAs(Form("%s%sdistribution_E%1.0fTo%1.0f_%s.png",dirName.c_str(),hNameID.c_str(),energybinEdges[i],energybinEdges[i+1],sampleName.c_str()));
@@ -1098,7 +1130,8 @@ void plotDistribution(const string &sampleName, const vector<Float_t> &energybin
       hist->SetTitle(Form("%1.0f < %s_{T}[GeV] < %1.0f",energybinEdges[i],whichEnergy.c_str(),energybinEdges[i+1]));
       c->SaveAs(Form("%s%sdistribution_ET%1.0fTo%1.0f_%s.pdf",dirName.c_str(),hNameID.c_str(),energybinEdges[i],energybinEdges[i+1],sampleName.c_str()));
       c->SaveAs(Form("%s%sdistribution_ET%1.0fTo%1.0f_%s.png",dirName.c_str(),hNameID.c_str(),energybinEdges[i],energybinEdges[i+1],sampleName.c_str()));
-    }
+    } 
+
 
   }
 
@@ -1141,14 +1174,21 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
   Double_t maximumYaxisValue = -100000.0;
   Double_t minimumYaxisValue = 100000.0;
 
-  Double_t value = hdata->GetBinContent(hdata->GetMaximumBin()) + hdata->GetBinError(hdata->GetMaximumBin()); 
-  if ( value > maximumYaxisValue) maximumYaxisValue = value; 
-  value =  hmc->GetBinContent(hmc->GetMaximumBin()) + hmc->GetBinError(hmc->GetMaximumBin());
-  if ( value > maximumYaxisValue) maximumYaxisValue = value;
-  value = hdata->GetBinContent(hdata->GetMinimumBin()) - hdata->GetBinError(hdata->GetMinimumBin());
-  if ( value < minimumYaxisValue) minimumYaxisValue = value;
-  value = hmc->GetBinContent(hmc->GetMinimumBin()) - hmc->GetBinError(hmc->GetMinimumBin());
-  if ( value < minimumYaxisValue) minimumYaxisValue = value;
+  // Double_t value = hdata->GetBinContent(hdata->GetMaximumBin()) + hdata->GetBinError(hdata->GetMaximumBin()); 
+  // if ( value > maximumYaxisValue) maximumYaxisValue = value; 
+  // value =  hmc->GetBinContent(hmc->GetMaximumBin()) + hmc->GetBinError(hmc->GetMaximumBin());
+  // if ( value > maximumYaxisValue) maximumYaxisValue = value;
+  // value = hdata->GetBinContent(hdata->GetMinimumBin()) - hdata->GetBinError(hdata->GetMinimumBin());
+  // if ( value < minimumYaxisValue) minimumYaxisValue = value;
+  // value = hmc->GetBinContent(hmc->GetMinimumBin()) - hmc->GetBinError(hmc->GetMinimumBin());
+  // if ( value < minimumYaxisValue) minimumYaxisValue = value;
+
+  maximumYaxisValue = TMath::Max(hdata->GetBinContent(hdata->GetMaximumBin()),hmc->GetBinContent(hmc->GetMaximumBin()));
+  minimumYaxisValue = TMath::Min(hdata->GetBinContent(hdata->GetMinimumBin()),hmc->GetBinContent(hmc->GetMinimumBin()));
+
+  Double_t diff = maximumYaxisValue - minimumYaxisValue;
+  minimumYaxisValue -= diff * 0.1;
+  maximumYaxisValue += diff * 0.1;
 
   if (setLogy != 0) {
     if (minimumYaxisValue < 0.0000001) minimumYaxisValue = 0.00001; // if compatible with 0 or negative, set it to value close to but different from zero
@@ -1236,8 +1276,17 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
       // ratioplotCopy->SetMinimum(0.9);
       // ratioplotCopy->SetMaximum(0.14);
     }
+
   }
-  
+   
+  maximumYaxisValue = ratioplotCopy->GetBinContent(ratioplotCopy->GetMaximumBin());
+  minimumYaxisValue = ratioplotCopy->GetBinContent(ratioplotCopy->GetMinimumBin());
+  diff = maximumYaxisValue - minimumYaxisValue;
+  minimumYaxisValue -= diff * 0.1;
+  maximumYaxisValue += diff * 0.1;
+  ratioplotCopy->SetMaximum(maximumYaxisValue);
+  ratioplotCopy->SetMinimum(minimumYaxisValue);
+
   if( canvasName== "modeEoverPfromFit" ) {
 
     // save ratioplot in root file and also produce a TGraphError associating each point to the mean energy in the bin. This information is stored in the files with all histgrams
@@ -1305,6 +1354,22 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
   h2->GetYaxis()->CenterTitle();
   h2->GetYaxis()->SetTitleOffset(1.3);
   gPad->Update();
+
+  TProfile* mapProfile = h2->ProfileX(Form("%s_pfx",h2->GetName()));
+  mapProfile->SetMarkerColor(kBlack);
+  mapProfile->SetMarkerStyle(20);
+  mapProfile->SetMarkerSize(1);
+  mapProfile->Draw("EPsame");
+
+  TLegend *leg = new TLegend(0.5,0.7,0.9,0.9);
+  leg->SetFillStyle(0);
+  leg->SetFillColor(0);
+  leg->SetBorderSize(0);
+  //  TLegendEntry *l1 = leg->AddEntry((TObject*)0,Form("Correlation = %.2f",h2->GetCorrelationFactor()),"");
+  leg->SetHeader(Form("Correlation = %.2f",h2->GetCorrelationFactor()));
+  leg->SetTextColor(0);
+  leg->Draw("same");
+
   TPaletteAxis *palette = (TPaletteAxis*)h2->GetListOfFunctions()->FindObject("palette");
   if (!palette || palette == NULL) {
     cout << "Error in function drawMap(): palette not found. ABORT" << endl;
@@ -1322,7 +1387,7 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
   c->SaveAs( (dirName + canvasName + ".png").c_str() );
 
   delete c;
-
+  delete leg;
 
 
 
@@ -1515,6 +1580,7 @@ void plotFromFit(const string &dataSampleName, const string &dataWgtSampleName, 
   if (USE_E) xAxisName = whichEnergy + " E [GeV]";
   else xAxisName = whichEnergy + " E_{T} [GeV]";
 
+  xAxisName = "P(track) [GeV]";
   Int_t nEnergyBins = energybinEdges.size() -1;
 
   TH1F* hPeakEoverPdata = new TH1F("hPeakEoverPdata","",nEnergyBins,energybinEdges.data());
