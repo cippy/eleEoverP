@@ -46,6 +46,9 @@
 #define USE_RAWE 0 // when 1, use raw SC energy instead of regression corrected ECAL energy  
 #define READ_FROM_LOCAL 1
 #define USE_P_AT_VTX 1
+#define ELE_ETA_MAX 1.47
+
+string finalDirOutName = "/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco_eta1p47/";
 
 //=======================================================
 
@@ -470,7 +473,7 @@ void plotEtWithGain(TH1F* g1, TH1F* g6, TH1F* g12, const string dirName, const s
   g1->GetYaxis()->SetTitleSize(0.045);
   g1->GetYaxis()->SetTitleOffset(1.2);
 
-  leg->SetHeader("EB: |#eta| < 1.0");
+  leg->SetHeader(Form("EB: |#eta| < %2.2f",ELE_ETA_MAX));
   leg->AddEntry(g1,"gain1","l");  
   leg->AddEntry(g6,"gain 6","l");  
   leg->AddEntry(g12,"gain 12","l");  
@@ -544,7 +547,7 @@ void compareWeightAndMultifit() {
   tmf->SetBranchAddress("energySCEle_must_regrCorr_ele",energySCEle_must_regrCorr_ele_mf);
   tmf->SetBranchAddress("rawEnergySCEle_must",rawEnergySCEle_must_mf);
   if (USE_P_AT_VTX) tmf->SetBranchAddress("pAtVtxGsfEle",pGsfEle_mf);
-  else tmf->SetBranchAddress("pModeGsfEle",pGsfEle);
+  else tmf->SetBranchAddress("pModeGsfEle",pGsfEle_mf);
   tmf->SetBranchAddress("gainEle",gainEle_mf);
 
   twgt->AddFriend(tmf);
@@ -566,11 +569,11 @@ void compareWeightAndMultifit() {
   
   Int_t nEnergyBins = energybinEdges.size() - 1;
 
-  TH1F* hModeEcorrWgtOverMfInBin = new TH1F("hModeEcorrWgtOverMfInBin","",nEnergyBins,energybinEdges.data());
-  TH1F* hEcorrWgtOverMf = new TH1F("hEcorrWgtOverMf","",80,0.81,1.21);
-  vector<TH1F*> hEcorrWgtOverMf_pTrackBin(nEnergyBins,NULL);
+  TH1F* hModeEcorrMfOverWgtInBin = new TH1F("hModeEcorrMfOverWgtInBin","",nEnergyBins,energybinEdges.data());
+  TH1F* hEcorrMfOverWgt = new TH1F("hEcorrMfOverWgt","",80,0.81,1.21);
+  vector<TH1F*> hEcorrMfOverWgt_pTrackBin(nEnergyBins,NULL);
   for (Int_t i = 0; i < nEnergyBins; i++) {
-    hEcorrWgtOverMf_pTrackBin[i] = new TH1F(Form("hEcorrWgtOverMf_pTrackBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",80,0.81,1.21);
+    hEcorrMfOverWgt_pTrackBin[i] = new TH1F(Form("hEcorrMfOverWgt_pTrackBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",80,0.81,1.21);
   }
 
   TH1F* hModeEMfOverWgtInBin = new TH1F("hModeEMfOverWgtInBin","",nEnergyBins,energybinEdges.data());
@@ -610,8 +613,8 @@ void compareWeightAndMultifit() {
     if ( !(runNumber_wgt == runNumber_mf && eventNumber_wgt == eventNumber_mf)) continue;
     //else if (i < 100) cout << runNumber_wgt << "   " << runNumber_mf << "\t" << eventNumber_wgt << "   " << eventNumber_mf << endl;
     count++;
-    if (PtEle[0] < 40 || fabs(etaEle[0]) > 1.0 || R9Ele[0] < 0.94) continue;
-    if (PtEle_mf[0] < 40 || fabs(etaEle_mf[0]) > 1.0 || R9Ele_mf[0] < 0.94) continue;
+    if (PtEle[0] < 40 || fabs(etaEle[0]) > ELE_ETA_MAX || R9Ele[0] < 0.94) continue;
+    if (PtEle_mf[0] < 40 || fabs(etaEle_mf[0]) > ELE_ETA_MAX || R9Ele_mf[0] < 0.94) continue;
     countCut++;
 
     // if (i%50000 == 0) cout << energySCEle_must_regrCorr_ele[0]/energySCEle_must_regrCorr_ele_mf[0] << endl;
@@ -625,24 +628,23 @@ void compareWeightAndMultifit() {
     EwgtOverEmf = energyToUse/energyToUse_mf;
     EmfOverEwgt = energyToUse_mf/energyToUse;
 
-    hEcorrWgtOverMf->Fill(EwgtOverEmf);
+    hEcorrMfOverWgt->Fill(EmfOverEwgt);
     hEMfOverWgt->Fill(EmfOverEwgt);
 
     Int_t binP = getBinNumber(pGsfEle[0],energybinEdges);  // this function returns negative value if bin not found       
     if (binP >= 0) {
-      hEcorrWgtOverMf_pTrackBin[binP]->Fill(EwgtOverEmf);
+      hEcorrMfOverWgt_pTrackBin[binP]->Fill(EmfOverEwgt);
     } else if (binP == -1) {
       // fill last bin with overflows to gain in statistics                                                                                                           
-      hEcorrWgtOverMf_pTrackBin[nEnergyBins-1]->Fill(EwgtOverEmf);
+      hEcorrMfOverWgt_pTrackBin[nEnergyBins-1]->Fill(EmfOverEwgt);
     }
 
     Int_t binE;
-    if (USE_RAWE) binE = getBinNumber(rawEnergySCEle_must_mf[0],energybinEdges);  // this function returns negative value if bin not found       
-    else binE = getBinNumber(energySCEle_must_regrCorr_ele_mf[0],energybinEdges);  // this function returns negative value if bin not found       
+    binE = getBinNumber(energyToUse_mf,energybinEdges);  // this function returns negative value if bin not found       
    
     if (binE >= 0) {
       hEMfOverWgt_EBin[binE]->Fill(EmfOverEwgt);
-    } else if (binP == -1) {
+    } else if (binE == -1) {
       // fill last bin with overflows to gain in statistics                                                                                                           
       hEMfOverWgt_EBin[nEnergyBins-1]->Fill(EmfOverEwgt);
     }
@@ -674,23 +676,23 @@ void compareWeightAndMultifit() {
   ////////////////////////////
 
   //void plotDistribution(vector<TH1F*> &hToFit, TH1F * hToFill, const string &dirName, const string &hNameID, const vector<Float_t> &energybinEdges) {
-  // for (UInt_t i = 0; i < hEcorrWgtOverMf_pTrackBin.size(); i++) {
-  //   cout << hEcorrWgtOverMf_pTrackBin[i]->GetEntries() << endl;
+  // for (UInt_t i = 0; i < hEcorrMfOverWgt_pTrackBin.size(); i++) {
+  //   cout << hEcorrMfOverWgt_pTrackBin[i]->GetEntries() << endl;
   // }
 
   if (USE_RAWE) {
 
-    plotDistribution(hEcorrWgtOverMf_pTrackBin, 
-		     hModeEcorrWgtOverMfInBin, 
-		     "/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eraw_pAtVtx_fit2sideCB_weightReco/",
-		     "ErawWgtOverMf",
+    plotDistribution(hEcorrMfOverWgt_pTrackBin, 
+		     hModeEcorrMfOverWgtInBin, 
+		     finalDirOutName,
+		     "ErawMfOverWgt",
 		     energybinEdges,
 		     "Ptrack",
-		     "wgtOverMf");
+		     "mfOverWgt");
 
     plotDistribution(hEMfOverWgt_EBin, 
 		     hModeEMfOverWgtInBin, 
-		     "/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eraw_pAtVtx_fit2sideCB_weightReco/",
+		     finalDirOutName,
 		     "ErawMfOverWgt",
 		     energybinEdges,
 		     "Eraw",
@@ -698,16 +700,17 @@ void compareWeightAndMultifit() {
 
   } else {
 
-    plotDistribution(hEcorrWgtOverMf_pTrackBin, 
-		     hModeEcorrWgtOverMfInBin, 
-		     "/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/",
-		     "EcorrWgtOverMf",
+    plotDistribution(hEcorrMfOverWgt_pTrackBin, 
+		     hModeEcorrMfOverWgtInBin, 
+		     finalDirOutName,
+		     "EcorrMfOverWgt",
 		     energybinEdges,
 		     "Ptrack",
-		     "wgtOverMf");
+		     "mfOverWgt");
+
     plotDistribution(hEMfOverWgt_EBin, 
 		     hModeEMfOverWgtInBin, 
-		     "/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/",
+		     finalDirOutName,
 		     "EcorrMfOverWgt",
 		     energybinEdges,
 		     "Ecorr",
@@ -716,45 +719,45 @@ void compareWeightAndMultifit() {
   }
 
   TCanvas *c1 = new TCanvas("c1","",700,700);
-  hEcorrWgtOverMf->SetStats(0);
-  hEcorrWgtOverMf->SetLineColor(kBlue);
-  hEcorrWgtOverMf->Draw("HE");
-  if (USE_RAWE) hEcorrWgtOverMf->GetXaxis()->SetTitle("E_{raw}(weight) / E_{raw}(multifit)");
-  else hEcorrWgtOverMf->GetXaxis()->SetTitle("E_{corr}(weight) / E_{corr}(multifit)");
-  //  hEcorrWgtOverMf->GetXaxis()->SetTitleOffset(0.8);
-  //  hEcorrWgtOverMf->GetXaxis()->SetTitleSize(0.04);
-  hEcorrWgtOverMf->GetYaxis()->SetTitle("Events");
-  hEcorrWgtOverMf->GetYaxis()->SetTitleSize(0.04);
-  hEcorrWgtOverMf->GetYaxis()->SetTitleOffset(1.2);
-  hEcorrWgtOverMf->GetYaxis()->CenterTitle();
+  hEcorrMfOverWgt->SetStats(0);
+  hEcorrMfOverWgt->SetLineColor(kBlue);
+  hEcorrMfOverWgt->Draw("HE");
+  if (USE_RAWE) hEcorrMfOverWgt->GetXaxis()->SetTitle("E_{raw}(multifit) / E_{raw}(weight)");
+  else hEcorrMfOverWgt->GetXaxis()->SetTitle(" E_{corr}(multifit) / E_{corr}(weight)");
+  //  hEcorrMfOverWgt->GetXaxis()->SetTitleOffset(0.8);
+  //  hEcorrMfOverWgt->GetXaxis()->SetTitleSize(0.04);
+  hEcorrMfOverWgt->GetYaxis()->SetTitle("Events");
+  hEcorrMfOverWgt->GetYaxis()->SetTitleSize(0.04);
+  hEcorrMfOverWgt->GetYaxis()->SetTitleOffset(1.2);
+  hEcorrMfOverWgt->GetYaxis()->CenterTitle();
   if (USE_RAWE) {
-    c1->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eraw_pAtVtx_fit2sideCB_weightReco/ErawWgtOverMf.pdf");
-    c1->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eraw_pAtVtx_fit2sideCB_weightReco/ErawWgtOverMf.png");
+    c1->SaveAs((finalDirOutName + "ErawMfOverWgt_pBin.pdf").c_str());
+    c1->SaveAs((finalDirOutName + "ErawMfOverWgt_pBin.png").c_str());
   } else {
-    c1->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/EcorrWgtOverMf.pdf");
-    c1->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/EcorrWgtOverMf.png");
+    c1->SaveAs((finalDirOutName + "EcorrMfOverWgt_pBin.pdf").c_str());
+    c1->SaveAs((finalDirOutName + "EcorrMfOverWgt_pBin.png").c_str());
   }
   delete c1;
 
   TCanvas *c2 = new TCanvas("c2","",700,700);
-  hModeEcorrWgtOverMfInBin->SetStats(0);
-  hModeEcorrWgtOverMfInBin->SetLineColor(kBlue);
-  hModeEcorrWgtOverMfInBin->Draw("HE");
-  hModeEcorrWgtOverMfInBin->GetXaxis()->SetTitle("p_{track} [GeV]");
-  //  hModeEcorrWgtOverMfInBin->GetXaxis()->SetTitleOffset(0.8);
-  //  hModeEcorrWgtOverMfInBin->GetXaxis()->SetTitleSize(0.04);
-  hModeEcorrWgtOverMfInBin->GetYaxis()->SetTitle("Peak( E(weight) / E(multifit) )");
-  if (FIT_2SIDE_CB) hModeEcorrWgtOverMfInBin->SetTitle("fit with double Crystal Ball");
-  else hModeEcorrWgtOverMfInBin->SetTitle("fit with Crystal Ball");
-  hModeEcorrWgtOverMfInBin->GetYaxis()->SetTitleSize(0.04);
-  hModeEcorrWgtOverMfInBin->GetYaxis()->SetTitleOffset(1.2);
-  hModeEcorrWgtOverMfInBin->GetYaxis()->CenterTitle();
+  hModeEcorrMfOverWgtInBin->SetStats(0);
+  hModeEcorrMfOverWgtInBin->SetLineColor(kBlue);
+  hModeEcorrMfOverWgtInBin->Draw("HE");
+  hModeEcorrMfOverWgtInBin->GetXaxis()->SetTitle("p_{track} [GeV]");
+  //  hModeEcorrMfOverWgtInBin->GetXaxis()->SetTitleOffset(0.8);
+  //  hModeEcorrMfOverWgtInBin->GetXaxis()->SetTitleSize(0.04);
+  hModeEcorrMfOverWgtInBin->GetYaxis()->SetTitle("Peak( E(multifit) / E(weight) )");
+  if (FIT_2SIDE_CB) hModeEcorrMfOverWgtInBin->SetTitle("fit with double Crystal Ball");
+  else hModeEcorrMfOverWgtInBin->SetTitle("fit with Crystal Ball");
+  hModeEcorrMfOverWgtInBin->GetYaxis()->SetTitleSize(0.04);
+  hModeEcorrMfOverWgtInBin->GetYaxis()->SetTitleOffset(1.2);
+  hModeEcorrMfOverWgtInBin->GetYaxis()->CenterTitle();
   if (USE_RAWE) {
-    c2->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eraw_pAtVtx_fit2sideCB_weightReco/peakErawWgtOverMf.pdf");
-    c2->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eraw_pAtVtx_fit2sideCB_weightReco/peakErawWgtOverMf.png");
+    c2->SaveAs((finalDirOutName + "peakErawMfOverWgt_pBin.pdf").c_str());
+    c2->SaveAs((finalDirOutName + "peakErawMfOverWgt_pBin.png").c_str());
   } else {
-    c2->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/peakEcorrWgtOverMf.pdf");
-    c2->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/peakEcorrWgtOverMf.png");
+    c2->SaveAs((finalDirOutName + "peakEcorrMfOverWgt_pBin.pdf").c_str());
+    c2->SaveAs((finalDirOutName + "peakEcorrMfOverWgt_pBin.png").c_str());
   }
   delete c2;
 
@@ -773,11 +776,11 @@ void compareWeightAndMultifit() {
   hEMfOverWgt->GetYaxis()->SetTitleOffset(1.2);
   hEMfOverWgt->GetYaxis()->CenterTitle();
   if (USE_RAWE) {
-    c3->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eraw_pAtVtx_fit2sideCB_weightReco/ErawMfOverWgt.pdf");
-    c3->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eraw_pAtVtx_fit2sideCB_weightReco/ErawMfOverWgt.png");
+    c3->SaveAs((finalDirOutName + "ErawMfOverWgt.pdf").c_str());
+    c3->SaveAs((finalDirOutName + "ErawMfOverWgt.png").c_str());
   } else {
-    c3->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/EcorrMfOverWgt.pdf");
-    c3->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/EcorrMfOverWgt.png");
+    c3->SaveAs((finalDirOutName + "EcorrMfOverWgt.pdf").c_str());
+    c3->SaveAs((finalDirOutName + "EcorrMfOverWgt.png").c_str());
   }
   delete c3;
 
@@ -796,17 +799,17 @@ void compareWeightAndMultifit() {
   hModeEMfOverWgtInBin->GetYaxis()->SetTitleOffset(1.2);
   hModeEMfOverWgtInBin->GetYaxis()->CenterTitle();
   if (USE_RAWE) {
-    c4->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eraw_pAtVtx_fit2sideCB_weightReco/peakErawMfOverWgt.pdf");
-    c4->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eraw_pAtVtx_fit2sideCB_weightReco/peakErawMfOverWgt.png");
+    c4->SaveAs((finalDirOutName + "peakErawMfOverWgt.pdf").c_str());
+    c4->SaveAs((finalDirOutName + "peakErawMfOverWgt.png").c_str());
   } else {
-    c4->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/peakEcorrMfOverWgt.pdf");
-    c4->SaveAs("/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/peakEcorrMfOverWgt.png");
+    c4->SaveAs((finalDirOutName + "peakEcorrMfOverWgt.pdf").c_str());
+    c4->SaveAs((finalDirOutName + "peakEcorrMfOverWgt.png").c_str());
   }
   delete c4;
 
-  plotGain(h1Gain,h2Gain,"/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/");
-  plotEtWithGain(hEtGain1,hEtGain6,hEtGain12,"/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/");
-  plotEtWithGain(hEGain1,hEGain6,hEGain12,"/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco/","E");
+  plotGain(h1Gain,h2Gain,finalDirOutName);
+  plotEtWithGain(hEtGain1,hEtGain6,hEtGain12,finalDirOutName);
+  plotEtWithGain(hEGain1,hEGain6,hEGain12,finalDirOutName,"E");
 
   cout << "nentries = " << nentries << "\tcount = " << count << "\tcountCut = " << countCut << endl;
 
