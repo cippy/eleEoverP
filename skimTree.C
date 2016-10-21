@@ -69,7 +69,7 @@ void buildChain(TChain* chain, string sampleName) {
 
 //=================================================0
 
-void skimTree(const string sampleName = "", const std::string selection = "") {
+void doSkimTree(const string sampleName = "", const std::string selection = "") {
 
   TChain* chain = new TChain("selected");
 
@@ -80,7 +80,7 @@ void skimTree(const string sampleName = "", const std::string selection = "") {
     exit(EXIT_FAILURE);
   }
 
-  std::string outfileName = "/u2/mciprian/TREES_shervin_skim/" + sampleName + "shervin.root";
+  std::string outfileName = "/u2/mciprian/TREES_shervin_skim/" + sampleName + "_shervin.root";
 
   TFile* outfile = new TFile(outfileName.c_str(), "RECREATE");
   if (!outfile || outfile->IsZombie()) {
@@ -127,3 +127,12 @@ void getChainEntries(const std::string selection = "") {
 }
 
 
+//=============================
+
+void skimTree(const std::string selection = "") {
+
+  doSkimTree("DATA", selection);
+  doSkimTree("DATA_w", selection);
+
+
+}
