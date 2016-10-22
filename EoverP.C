@@ -272,7 +272,7 @@ void setHistColor(vector<Int_t> &histColor, const Int_t nObject) {
 }
 
 
-void buildChainWithFriend(TChain* chain, TChain* chFriend, string sampleName) {
+void buildChainWithFriend(TChain* chain, TChain* chFriend, string sampleName, TChain* chsfFriend = NULL) {
   
   cout << "Creating chain ..." << endl;
   
@@ -283,7 +283,14 @@ void buildChainWithFriend(TChain* chain, TChain* chFriend, string sampleName) {
     // 2016 2.6fb^-1
     if (DATA2016) {
       if (SKIM_1TLEP30) {
-	subSampleNameVector.push_back("");
+	subSampleNameVector.push_back("SingleElectron_Run2016B_PromptReco_v1_runs_272023_273146");
+	subSampleNameVector.push_back("SingleElectron_Run2016B_PromptReco_v2_runs_273150_275376");
+	subSampleNameVector.push_back("SingleElectron_Run2016C_PromptReco_v2_runs_275420_276283");
+	subSampleNameVector.push_back("SingleElectron_Run2016D_PromptReco_v2_runs_276315_276811");
+	subSampleNameVector.push_back("SingleElectron_Run2016E_PromptReco_v2_runs_276830_277420");
+	subSampleNameVector.push_back("SingleElectron_Run2016F_PromptReco_v1_runs_277820_278808");
+	subSampleNameVector.push_back("SingleElectron_Run2016G_PromptReco_v1_runs_278817_279931");	
+	subSampleNameVector.push_back("SingleElectron_Run2016H_PromptReco_v1_runs_281085_281201");	
       } else if (SKIM_1LEP1JET_80X) {
 	subSampleNameVector.push_back("SingleElectron_Run2016B_PromptReco_v1_runs_272023_273146");
 	subSampleNameVector.push_back("SingleElectron_Run2016B_PromptReco_v2_runs_273150_275376");
@@ -307,6 +314,18 @@ void buildChainWithFriend(TChain* chain, TChain* chFriend, string sampleName) {
     if (SKIM_1TLEP30) {
       if (MC_NLO_NOHTBIN) {
 	subSampleNameVector.push_back("WJetsToLNu");	
+      } else {
+	subSampleNameVector.push_back("WJetsToLNu_HT100to200");
+	//subSampleNameVector.push_back("WJetsToLNu_HT100to200_ext");
+	subSampleNameVector.push_back("WJetsToLNu_HT200to400");
+	//subSampleNameVector.push_back("WJetsToLNu_HT200to400_ext");
+	subSampleNameVector.push_back("WJetsToLNu_HT400to600");
+	//subSampleNameVector.push_back("WJetsToLNu_HT400to600_ext");
+	subSampleNameVector.push_back("WJetsToLNu_HT600to800");
+	subSampleNameVector.push_back("WJetsToLNu_HT800to1200");
+	//subSampleNameVector.push_back("WJetsToLNu_HT800to1200_ext");
+	subSampleNameVector.push_back("WJetsToLNu_HT1200to2500");
+	subSampleNameVector.push_back("WJetsToLNu_HT2500toInf");
       }
     } else if (SKIM_1LEP1JET_80X) {
       subSampleNameVector.push_back("WJetsToLNu_HT100to200");
@@ -339,7 +358,9 @@ void buildChainWithFriend(TChain* chain, TChain* chFriend, string sampleName) {
 
   //2016 trees
   string treePath = "";
-  if (SKIM_1TLEP30) treePath = "/afs/cern.ch/work/m/mciprian/EoverP_study_new/CMSSW_8_0_10/src/eleEoverP/TREES_1tightEle30_skim/";
+  if (SKIM_1TLEP30){
+    if (MC_NLO_NOHTBIN) treePath = "/afs/cern.ch/work/m/mciprian/EoverP_study_new/CMSSW_8_0_10/src/eleEoverP/TREES_1tightEle30_skim/";
+    else treePath = "root://eoscms//eos/cms/store/group/phys_exotica/monojet/mciprian/trees_80X/TREES_1TIGHTELE30SKIM_4EoP/";
   else if (SKIM_1LEP1JET_80X) treePath = "root://eoscms//eos/cms/store/group/phys_exotica/monojet/mciprian/trees_80X/TREES_1TLEP1JET_80X_4EoP/"; // 2016 trees with skim 1 lep1jet
   else {
     if (DATA2016) treePath = "root://eoscms//eos/cms/store/cmst3/group/susy/emanuele/monox/trees/TREES_1LEPSKIM_80X/"; // 2016 trees
@@ -350,8 +371,10 @@ void buildChainWithFriend(TChain* chain, TChain* chFriend, string sampleName) {
   
     string treeRootFile = treePath + subSampleNameVector[i] + "_treeProducerDarkMatterMonoJet_tree.root";
     string friend_treeRootFile = "";
+    string sffriend_treeRootFile = "";
     if (SKIM_1LEP1JET_80X || SKIM_1TLEP30) {
       friend_treeRootFile = treePath + "evVarFriend_" + subSampleNameVector[i]+ ".root";
+      if (SKIM_1TLEP30) sffriend_treeRootFile = treePath + "sfFriend_" + subSampleNameVector[i]+ ".root";
     } else {
       if (DATA2016) friend_treeRootFile = treePath + "friends_evVarFriend_" + subSampleNameVector[i]+ ".root";
       else friend_treeRootFile = treePath + "evVarFriend_" + subSampleNameVector[i]+ ".root";
@@ -359,16 +382,19 @@ void buildChainWithFriend(TChain* chain, TChain* chFriend, string sampleName) {
 
     chain->Add(TString(treeRootFile.c_str()));
     chFriend->Add(TString(friend_treeRootFile.c_str()));
+    if (SKIM_1TLEP30) chsfFriend->Add(TString(sffriend_treeRootFile.c_str()));
 
   }
 
   cout << "Adding friend to chain ..." << endl;
   chain->AddFriend(chFriend);  //adding whole friend chain as friend                                                           
+  if (SKIM_1TLEP30 && chsfFriend != NULL) chain->AddFriend(chsfFriend);  //adding whole friend chain as friend                
 
   if(!chain || !chFriend) {
     cout << "Error: chain not created. End of programme" << endl;
     exit(EXIT_FAILURE);
   }
+
   cout << chain->GetEntries() << endl;
 
 }
@@ -439,6 +465,12 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges
      fChain->SetBranchStatus("weight",1);
      fChain->SetBranchStatus("puw",1);
      fChain->SetBranchStatus("SF_BTag",1);
+
+     fChain->SetBranchStatus("SF_trig1lep",1);
+     fChain->SetBranchStatus("SF_LepTight",1);
+     fChain->SetBranchStatus("SF_NLO_QCD",1);
+     fChain->SetBranchStatus("SF_NLO_EWK",1);
+
    }
 
    gStyle->SetStatStyle(0);
@@ -573,7 +605,10 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges
       if (sampleName != "DATA") {
 	if (reweightMC) wgt = (Double_t) hwgt->GetBinContent(hwgt->FindBin(energyToUse));
 	else if (NO_MC_WEIGHT) wgt = 1.0;
-	else wgt = 20.165289 * weight * puw * SF_BTag;  // the number is the lumi in data / 1.21
+	else {
+	  wgt = 24.4 * weight * puw * SF_NLO_QCD * SF_NLO_EWK * SF_trig1lep * SF_LepTight;
+	  if (!MC_NLO_NOHTBIN) wgt /= 1.21;
+	}
       }
       else wgt = 1.0;
 
@@ -601,8 +636,8 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges
 
       Double_t EoverP_toUse = -1.0;
       // LepGood_eSuperClusterOverP[0] is E_regrCorr/P_track. If we need E_raw/P_track then divide by E_egrCorr and multiply by E_raw
-      if (USE_RAWE) EoverP_toUse = LepGood_eSuperClusterOverP[0] * LepGood_superCluster_rawEnergy[0] / LepGood_correctedEcalEnergy[0];
-      else EoverP_toUse = LepGood_eSuperClusterOverP[0];
+      if (USE_RAWE) EoverP_toUse = LepGood_superCluster_rawEnergy[0] / LepGood_gsfTrackP[0];
+      else EoverP_toUse = LepGood_correctedEcalEnergy[0] / LepGood_gsfTrackP[0];
 
 
       //if (!(fabs(LepGood_pdgId[0]) == 11 && LepGood_pt[0] > 40 && fabs(LepGood_eta[0]) > 1.0 && fabs(LepGood_eta[0]) < 1.479)) continue;
@@ -672,9 +707,10 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges
 
 	if (MCtruthMatchFound) {
 	  
-	  hEcorrOverEtrue_energyBin[etrueBin]->Fill(LepGood_correctedEcalEnergy[0]/Etrue);
-	  hErawOverEtrue_energyBin[etrueBin]->Fill(LepGood_superCluster_rawEnergy[0]/Etrue);
-	  hPtrackOverEtrue_energyBin[etrueBin]->Fill(LepGood_correctedEcalEnergy[0]/(LepGood_eSuperClusterOverP[0]*Etrue));    
+	  Double_t invEtrue = 1./Etrue;
+	  hEcorrOverEtrue_energyBin[etrueBin]->Fill(LepGood_correctedEcalEnergy[0] * invEtrue);
+	  hErawOverEtrue_energyBin[etrueBin]->Fill(LepGood_superCluster_rawEnergy[0] * invEtrue);
+	  hPtrackOverEtrue_energyBin[etrueBin]->Fill(LepGood_gsfTrackP[0] * invEtrue);    
 	  // Ptrack/Etrue = corrE * (EoverP)^-1 / Etrue
 	}
       }
@@ -1819,8 +1855,9 @@ Int_t main(Int_t argc, char* argv[]) {
     
       TChain* chain = new TChain("tree");
       TChain* chFriend = new TChain("mjvars/t");
+      TChain* chsfFriend = new TChain("sf/t");
 
-      buildChainWithFriend(chain, chFriend, sampleName[i]);
+      buildChainWithFriend(chain, chFriend, sampleName[i], chsfFriend);
     
       if(!chain || !chFriend) {
 	cout << "Error: chain not created. End of programme" << endl;
@@ -1838,6 +1875,7 @@ Int_t main(Int_t argc, char* argv[]) {
 
       delete chain;
       delete chFriend;
+      delete chsfFriend;
 
     }
 
