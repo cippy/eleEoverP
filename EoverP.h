@@ -78,6 +78,26 @@ public :
    Float_t         TauClean_phi[3];   //[nTauClean]
    Float_t         puw;
 
+   // adding sfFriend variables
+   Float_t         SF_trig1lep;
+   Float_t         SF_trigmetnomu;
+   Float_t         SF_LepTightLoose;
+   Float_t         SF_LepTight;
+   Float_t         SF_LepTightLooseUp;
+   Float_t         SF_LepTightUp;
+   Float_t         SF_LepTightLooseDown;
+   Float_t         SF_LepTightDown;
+   Float_t         SF_NLO_QCD;
+   Float_t         SF_NLO_QCD_renScaleUp;
+   Float_t         SF_NLO_QCD_renScaleDown;
+   Float_t         SF_NLO_QCD_facScaleUp;
+   Float_t         SF_NLO_QCD_facScaleDown;
+   Float_t         SF_NLO_QCD_pdfUp;
+   Float_t         SF_NLO_QCD_pdfDown;
+   Float_t         SF_NLO_EWK;
+   Float_t         SF_NLO_EWK_up;
+   Float_t         SF_NLO_EWK_down;
+
    UInt_t          run;
    UInt_t          lumi;
    ULong64_t       evt;
@@ -627,6 +647,26 @@ public :
    TBranch        *b_TauClean_eta;   //!
    TBranch        *b_TauClean_phi;   //!
    TBranch        *b_puw;   //!
+
+   // adding sfFriend branches
+   TBranch        *b_SF_trig1lep;   //!
+   TBranch        *b_SF_trigmetnomu;   //!
+   TBranch        *b_SF_LepTightLoose;   //!
+   TBranch        *b_SF_LepTight;   //!
+   TBranch        *b_SF_LepTightLooseUp;   //!
+   TBranch        *b_SF_LepTightUp;   //!
+   TBranch        *b_SF_LepTightLooseDown;   //!
+   TBranch        *b_SF_LepTightDown;   //!
+   TBranch        *b_SF_NLO_QCD;   //!
+   TBranch        *b_SF_NLO_QCD_renScaleUp;   //!
+   TBranch        *b_SF_NLO_QCD_renScaleDown;   //!
+   TBranch        *b_SF_NLO_QCD_facScaleUp;   //!
+   TBranch        *b_SF_NLO_QCD_facScaleDown;   //!
+   TBranch        *b_SF_NLO_QCD_pdfUp;   //!
+   TBranch        *b_SF_NLO_QCD_pdfDown;   //!
+   TBranch        *b_SF_NLO_EWK;   //!
+   TBranch        *b_SF_NLO_EWK_up;   //!
+   TBranch        *b_SF_NLO_EWK_down; //!
 
    TBranch        *b_run;   //!
    TBranch        *b_lumi;   //!
@@ -1245,6 +1285,26 @@ void EoverP::Init(TTree *tree)
    fChain->SetBranchAddress("TauClean_eta", TauClean_eta, &b_TauClean_eta);
    fChain->SetBranchAddress("TauClean_phi", TauClean_phi, &b_TauClean_phi);
    fChain->SetBranchAddress("puw", &puw, &b_puw);
+
+   //setting branches for sfFriend variables
+   fChain->SetBranchAddress("SF_trig1lep", &SF_trig1lep, &b_SF_trig1lep);
+   fChain->SetBranchAddress("SF_trigmetnomu", &SF_trigmetnomu, &b_SF_trigmetnomu);
+   fChain->SetBranchAddress("SF_LepTightLoose", &SF_LepTightLoose, &b_SF_LepTightLoose);
+   fChain->SetBranchAddress("SF_LepTight", &SF_LepTight, &b_SF_LepTight);
+   fChain->SetBranchAddress("SF_LepTightLooseUp", &SF_LepTightLooseUp, &b_SF_LepTightLooseUp);
+   fChain->SetBranchAddress("SF_LepTightUp", &SF_LepTightUp, &b_SF_LepTightUp);
+   fChain->SetBranchAddress("SF_LepTightLooseDown", &SF_LepTightLooseDown, &b_SF_LepTightLooseDown);
+   fChain->SetBranchAddress("SF_LepTightDown", &SF_LepTightDown, &b_SF_LepTightDown);
+   fChain->SetBranchAddress("SF_NLO_QCD", &SF_NLO_QCD, &b_SF_NLO_QCD);
+   fChain->SetBranchAddress("SF_NLO_QCD_renScaleUp", &SF_NLO_QCD_renScaleUp, &b_SF_NLO_QCD_renScaleUp);
+   fChain->SetBranchAddress("SF_NLO_QCD_renScaleDown", &SF_NLO_QCD_renScaleDown, &b_SF_NLO_QCD_renScaleDown);
+   fChain->SetBranchAddress("SF_NLO_QCD_facScaleUp", &SF_NLO_QCD_facScaleUp, &b_SF_NLO_QCD_facScaleUp);
+   fChain->SetBranchAddress("SF_NLO_QCD_facScaleDown", &SF_NLO_QCD_facScaleDown, &b_SF_NLO_QCD_facScaleDown);
+   fChain->SetBranchAddress("SF_NLO_QCD_pdfUp", &SF_NLO_QCD_pdfUp, &b_SF_NLO_QCD_pdfUp);
+   fChain->SetBranchAddress("SF_NLO_QCD_pdfDown", &SF_NLO_QCD_pdfDown, &b_SF_NLO_QCD_pdfDown);
+   fChain->SetBranchAddress("SF_NLO_EWK", &SF_NLO_EWK, &b_SF_NLO_EWK);
+   fChain->SetBranchAddress("SF_NLO_EWK_up", &SF_NLO_EWK_up, &b_SF_NLO_EWK_up);
+   fChain->SetBranchAddress("SF_NLO_EWK_down", &SF_NLO_EWK_down, &b_SF_NLO_EWK_down);
 
    fChain->SetBranchAddress("run", &run, &b_run);
    fChain->SetBranchAddress("lumi", &lumi, &b_lumi);
