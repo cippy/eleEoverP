@@ -46,9 +46,34 @@
 #define USE_RAWE 0 // when 1, use raw SC energy instead of regression corrected ECAL energy  
 #define READ_FROM_LOCAL 1
 #define USE_P_AT_VTX 1
-#define ELE_ETA_MAX 1.47
+#define ELE_ETA_MAX 1.0
 
-string finalDirOutName = "/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco_eta1p47/";
+string finalDirOutName = "/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco_eta1p0_tightID2012/";
+
+
+//=======================================================
+
+
+void myAddOverflowInLastBin(TH1F *h) {  // this is the function in functionsForAnalysis.cc, but I copied here to simplify compilation
+
+  // to avoid problems regarding memory leak for not deleting htemp in previous function, I sum directly the content of overflow bin in last bin
+
+  Int_t lastBinNumber = h->GetNbinsX();
+  Int_t overflowBinNumber = 1 + lastBinNumber;
+  Double_t lastBinContent = h->GetBinContent(lastBinNumber);
+  Double_t overflowBinContent = h->GetBinContent(overflowBinNumber);
+  Double_t lastBinError = h->GetBinError(lastBinNumber);
+  Double_t overflowBinError = h->GetBinError(overflowBinNumber);
+
+  // add content of overflow bin in last bin and set error as square root of sum of error squares (with the assumption that they are uncorrelated)
+  h->SetBinContent(lastBinNumber, lastBinContent + overflowBinContent);
+  h->SetBinError(lastBinNumber, sqrt(lastBinError * lastBinError + overflowBinError * overflowBinError));
+  // deleting content of last bin (safer, since I might be using that bin to add it again somewhere and I want it to be empty)
+  h->SetBinContent(overflowBinNumber,0.0);
+  h->SetBinError(overflowBinNumber,0.0);
+
+}
+
 
 //=======================================================
 
@@ -438,6 +463,61 @@ void plotGain(TH1F* h1Gain, TH1F* h2Gain, const string dirName) {
 
 //=====================================================================                                                             
 
+
+void plotVar(TH1F* h1, TH1F* h2, const string dirName, const string plotIDname, const string xAxisName) {
+
+  TH1::SetDefaultSumw2();            //all the following histograms will automatically call TH1::Sumw2()                                        
+
+  gStyle->SetOptStat(10);
+
+  TCanvas *c = new TCanvas("c","",700,700);
+  TLegend *leg = new TLegend(0.45,0.65,0.9,0.87);
+  h1->SetStats(0);
+  h2->SetStats(0);
+
+  if (plotIDname == "pNormalizedChi2") c->SetLogx();
+ 
+  h1->SetLineColor(kBlue);
+  h2->SetLineColor(kRed);
+
+  myAddOverflowInLastBin(h1);
+  myAddOverflowInLastBin(h2);
+
+  h1->Scale(1./h1->Integral());
+  h2->Scale(1./h2->Integral());
+
+  h1->Draw("HE");
+  h2->Draw("HE SAME");
+
+  Double_t max = h1->GetBinContent(h1->GetMaximumBin());
+  if (h2->GetBinContent(h2->GetMaximumBin()) > max) max = h2->GetBinContent(h2->GetMaximumBin());
+  h1->SetMaximum(max * 1.20);
+  //h1->SetMinimum(min);
+
+  h1->SetTitle("450 < E_{corr} < 650 GeV");
+  h1->GetXaxis()->SetTitle(xAxisName.c_str());
+  h1->GetYaxis()->SetTitle("a.u.");
+  h1->GetYaxis()->SetTitleSize(0.045);
+  h1->GetYaxis()->SetTitleOffset(1.2);
+
+  leg->AddEntry(h1,"E_{multifit}/E_{weight} < 0.95","l");  
+  leg->AddEntry(h2,"E_{multifit}/E_{weight} > 0.95","l");  
+  leg->Draw();
+  leg->SetMargin(0.3); 
+  leg->SetBorderSize(0);
+  leg->SetFillStyle(0);
+  c->Update();
+  c->SaveAs((dirName + plotIDname + "_E450to650.pdf").c_str());
+  c->SaveAs((dirName + plotIDname + "_E450to650.png").c_str());
+
+  delete c;
+  delete leg;
+  
+}
+
+//=====================================================================                                                             
+
+
 void plotEtWithGain(TH1F* g1, TH1F* g6, TH1F* g12, const string dirName, const string EorEt = "Et") {
 
   TH1::SetDefaultSumw2();            //all the following histograms will automatically call TH1::Sumw2()                                        
@@ -496,6 +576,26 @@ void plotEtWithGain(TH1F* g1, TH1F* g6, TH1F* g12, const string dirName, const s
 
 }
 
+//====================================================================
+
+void setMinMaxInPlot(TH1F* h, Double_t minWidthFactor = 0.1, Double_t maxWidthFactor = 0.1, Double_t *min = NULL, Double_t *max = NULL) {
+  
+  Double_t minimum, maximum;
+
+  minimum = h->GetBinContent(h->GetMinimumBin());
+  maximum = h->GetBinContent(h->GetMaximumBin());
+
+  Double_t diff = maximum - minimum;
+  minimum -= diff * minWidthFactor;
+  maximum += diff * maxWidthFactor;
+
+  h->SetMinimum(minimum);
+  h->SetMaximum(maximum); 
+
+  if (min != NULL) *min = minimum;
+  if (max != NULL) *max = maximum;
+
+}
 
 //=====================================================================                                                             
 
@@ -514,12 +614,14 @@ void compareWeightAndMultifit() {
 
   Int_t           runNumber_wgt, runNumber_mf ;
   ULong64_t       eventNumber_wgt, eventNumber_mf;
+
   Float_t         PtEle[3];
   Float_t         etaEle[3];
   Float_t         R9Ele[3];
   Float_t         energySCEle_must_regrCorr_ele[3];
   Float_t         rawEnergySCEle_must[3];
   Float_t         pGsfEle[3];
+  UInt_t          eleID[3];
 
   Float_t         PtEle_mf[3];
   Float_t         etaEle_mf[3];
@@ -527,13 +629,20 @@ void compareWeightAndMultifit() {
   Float_t         energySCEle_must_regrCorr_ele_mf[3];
   Float_t         rawEnergySCEle_must_mf[3];
   Float_t         pGsfEle_mf[3];
+  UInt_t          eleID_mf[3];
+  // variables in multifit for tests
   UChar_t         gainEle_mf[3];
+  Int_t           nPV_mf;
+  Int_t           nPU_mf;
+  Int_t           recoFlagsEle_mf[3];
+  Float_t         pNormalizedChi2Ele_mf[3];
 
   twgt->SetBranchAddress("runNumber",&runNumber_wgt);
   twgt->SetBranchAddress("eventNumber",&eventNumber_wgt);
   twgt->SetBranchAddress("PtEle",PtEle);
   twgt->SetBranchAddress("etaEle",etaEle);
   twgt->SetBranchAddress("R9Ele",R9Ele);
+  twgt->SetBranchAddress("eleID",eleID);
   twgt->SetBranchAddress("energySCEle_must_regrCorr_ele",energySCEle_must_regrCorr_ele);
   twgt->SetBranchAddress("rawEnergySCEle_must",rawEnergySCEle_must);
   if (USE_P_AT_VTX) twgt->SetBranchAddress("pAtVtxGsfEle",pGsfEle);
@@ -544,11 +653,17 @@ void compareWeightAndMultifit() {
   tmf->SetBranchAddress("PtEle",PtEle_mf);
   tmf->SetBranchAddress("etaEle",etaEle_mf);
   tmf->SetBranchAddress("R9Ele",R9Ele_mf);
+  tmf->SetBranchAddress("eleID",eleID_mf);
   tmf->SetBranchAddress("energySCEle_must_regrCorr_ele",energySCEle_must_regrCorr_ele_mf);
   tmf->SetBranchAddress("rawEnergySCEle_must",rawEnergySCEle_must_mf);
   if (USE_P_AT_VTX) tmf->SetBranchAddress("pAtVtxGsfEle",pGsfEle_mf);
   else tmf->SetBranchAddress("pModeGsfEle",pGsfEle_mf);
+
   tmf->SetBranchAddress("gainEle",gainEle_mf);
+  tmf->SetBranchAddress("nPV",&nPV_mf);
+  tmf->SetBranchAddress("nPU",&nPU_mf);
+  tmf->SetBranchAddress("recoFlagsEle",recoFlagsEle_mf);
+  tmf->SetBranchAddress("pNormalizedChi2Ele",pNormalizedChi2Ele_mf);
 
   twgt->AddFriend(tmf);
 
@@ -583,8 +698,17 @@ void compareWeightAndMultifit() {
     hEMfOverWgt_EBin[i] = new TH1F(Form("hEMfOverWgt_EBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",80,0.81,1.21);
   }
 
+  // for tests
   TH1F *h1Gain = new TH1F("h1Gain","",3,-0.5,2.5);
   TH1F *h2Gain = new TH1F("h2Gain","",3,-0.5,2.5);
+  TH1F *h1nPU = new TH1F("h1nPU","",20,0,40);
+  TH1F *h2nPU = new TH1F("h2nPU","",20,0,40);
+  TH1F *h1nPV = new TH1F("h1nPV","",20,0,40);
+  TH1F *h2nPV = new TH1F("h2nPV","",20,0,40);
+  TH1F *h1recoFlagsEle = new TH1F("h1recoFlagsEle","",5,0.5,5.5);
+  TH1F *h2recoFlagsEle = new TH1F("h2recoFlagsEle","",5,0.5,5.5);
+  TH1F *h1pNormalizedChi2Ele = new TH1F("h1pNormalizedChi2Ele","",100,0.5,10.5);
+  TH1F *h2pNormalizedChi2Ele = new TH1F("h2pNormalizedChi2Ele","",100,0.5,10.5);
 
   TH1F *hEtGain1 = new TH1F("hEtGain1","",90,0,900);
   TH1F *hEtGain6 = new TH1F("hEtGain6","",90,0,900);
@@ -595,6 +719,7 @@ void compareWeightAndMultifit() {
   TH1F *hEGain12 = new TH1F("hEGain12","",90,0,900);
 
   Long64_t count = 0;
+  Long64_t countCutNoID = 0;
   Long64_t countCut = 0;
   Double_t EwgtOverEmf = 0.0;
   Double_t EmfOverEwgt = 0.0;
@@ -615,6 +740,9 @@ void compareWeightAndMultifit() {
     count++;
     if (PtEle[0] < 40 || fabs(etaEle[0]) > ELE_ETA_MAX || R9Ele[0] < 0.94) continue;
     if (PtEle_mf[0] < 40 || fabs(etaEle_mf[0]) > ELE_ETA_MAX || R9Ele_mf[0] < 0.94) continue;
+    countCutNoID++;
+    if ( (eleID[0] & 0x0008) != 0x0008 ) continue;
+    if ( (eleID_mf[0] & 0x0008) != 0x0008 ) continue;
     countCut++;
 
     // if (i%50000 == 0) cout << energySCEle_must_regrCorr_ele[0]/energySCEle_must_regrCorr_ele_mf[0] << endl;
@@ -653,8 +781,16 @@ void compareWeightAndMultifit() {
 
       if (EmfOverEwgt < 0.95) {
 	h1Gain->Fill(gainEle_mf[0]);
-      } else {
+	h1nPU->Fill(nPU_mf);
+	h1nPV->Fill(nPV_mf);
+	h1recoFlagsEle->Fill(recoFlagsEle_mf[0]);
+	h1pNormalizedChi2Ele->Fill(pNormalizedChi2Ele_mf[0]);
+      }	else {
 	h2Gain->Fill(gainEle_mf[0]);
+	h2nPU->Fill(nPU_mf);
+	h2nPV->Fill(nPV_mf);
+	h2recoFlagsEle->Fill(recoFlagsEle_mf[0]);
+	h2pNormalizedChi2Ele->Fill(pNormalizedChi2Ele_mf[0]);
       }
       
     }
@@ -752,6 +888,7 @@ void compareWeightAndMultifit() {
   hModeEcorrMfOverWgtInBin->GetYaxis()->SetTitleSize(0.04);
   hModeEcorrMfOverWgtInBin->GetYaxis()->SetTitleOffset(1.2);
   hModeEcorrMfOverWgtInBin->GetYaxis()->CenterTitle();
+  setMinMaxInPlot(hModeEcorrMfOverWgtInBin);
   if (USE_RAWE) {
     c2->SaveAs((finalDirOutName + "peakErawMfOverWgt_pBin.pdf").c_str());
     c2->SaveAs((finalDirOutName + "peakErawMfOverWgt_pBin.png").c_str());
@@ -798,6 +935,7 @@ void compareWeightAndMultifit() {
   hModeEMfOverWgtInBin->GetYaxis()->SetTitleSize(0.04);
   hModeEMfOverWgtInBin->GetYaxis()->SetTitleOffset(1.2);
   hModeEMfOverWgtInBin->GetYaxis()->CenterTitle();
+  setMinMaxInPlot(hModeEMfOverWgtInBin);
   if (USE_RAWE) {
     c4->SaveAs((finalDirOutName + "peakErawMfOverWgt.pdf").c_str());
     c4->SaveAs((finalDirOutName + "peakErawMfOverWgt.png").c_str());
@@ -807,10 +945,17 @@ void compareWeightAndMultifit() {
   }
   delete c4;
 
-  plotGain(h1Gain,h2Gain,finalDirOutName);
+  plotGain(h1Gain, h2Gain, finalDirOutName);
+  plotVar(h1nPU, h2nPU, finalDirOutName, "nPU", "N(PU)");
+  plotVar(h1nPV, h2nPV, finalDirOutName, "nPV", "N(PV)");
+  plotVar(h1recoFlagsEle, h2recoFlagsEle, finalDirOutName, "recoFlags", "reco Flag");
+  plotVar(h1pNormalizedChi2Ele, h2pNormalizedChi2Ele, finalDirOutName, "pNormalizedChi2", "P normalized #Chi^{2}");
   plotEtWithGain(hEtGain1,hEtGain6,hEtGain12,finalDirOutName);
   plotEtWithGain(hEGain1,hEGain6,hEGain12,finalDirOutName,"E");
-
-  cout << "nentries = " << nentries << "\tcount = " << count << "\tcountCut = " << countCut << endl;
+	
+  cout << "nentries = " << nentries << endl;
+  cout << "count = " << count << endl;
+  cout << "countCutNoID = " << countCutNoID << endl;
+  cout << "countCut = " << countCut << endl;
 
 }
