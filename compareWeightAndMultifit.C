@@ -45,10 +45,10 @@
 #define USE_E 1 // 0 for ET and 1 for E in the binning                                       
 #define USE_RAWE 0 // when 1, use raw SC energy instead of regression corrected ECAL energy  
 #define READ_FROM_LOCAL 1
-#define USE_P_AT_VTX 1
+#define USE_P_AT_VTX 0
 #define ELE_ETA_MAX 1.0
 
-string finalDirOutName = "/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pAtVtx_fit2sideCB_weightReco_eta1p0_tightID2012/";
+string finalDirOutName = "/afs/cern.ch/user/m/mciprian/www/EoverP/plot/2016_singleEleRunBtoG_Eregr_pMode_fit2sideCB_weightReco_eta1p0_tightID2012/";
 
 
 //=======================================================

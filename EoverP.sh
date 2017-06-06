@@ -16,13 +16,13 @@ for option in "$@";
 do
     if [ $option = "-c" ]
     then
-    # if option -c passed, we just want to complile and exit script
+    # if option -c passed, we just want to compile and exit script
 	return 0
     fi
 done
 
 # name of directory where files are stored (can be a single name or a path, they will be created from current directory below)
-outputDirName="plot/2016_skim1lep1jet_usingET_fitTemplate/"  
+outputDirName="plot/test_newSamples_runBtoH_2sideCB_Ext_xsecWeight_PfromEoverP_HT200_ptEle50_vetoMuGamTauBjet/"  
 ############################################
 # WARNING  --> outputDirName must end with /
 ########################################### 

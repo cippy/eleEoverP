@@ -46,6 +46,7 @@
 #include <sstream>      // std::istringstream ; to read array of numbers from a line in a file                          
 #include <string>
 #include <vector>
+#include <map>
 #include <iomanip> //for input/output manipulators 
 
 #include <Rtypes.h> // to use kColor
@@ -61,12 +62,13 @@
 #define SET_SCALE_ON_Y 0    // select default or user defined ranges for y axis
 #define USE_E 1 // 0 for ET and 1 for E in the binning
 #define USE_RAWE 0 // when 1, use raw SC energy instead of regression corrected ECAL energy
-#define NO_MC_WEIGHT 1   // if you don't want to weight MC with scale factors, PU ecc...  (however, reweighting MC to match Ecorr distr in data can still be done)
+#define NO_MC_WEIGHT 0   // if you don't want to weight MC with scale factors, PU ecc...  (however, reweighting MC to match Ecorr distr in data can still be done)
 #define ELE_ETA_MAX 1.0  // cut on eta
 #define MC_NLO_NOHTBIN 0  // to use NLO MC for W which is not binned in HT, it works with SKIM_1TLEP30 set to 1
-#define E_OVER_P_FROM_TREE 0  // LepGood_gsfTrackP was added in trees recently, for older ones set this flag to 1 and p(track) will be derived as LepGood_correctedEcalEnergy[0]/LepGood_eSuperClusterOverP[0]
-#define CUT_HT 100
+#define E_OVER_P_FROM_TREE 1  // LepGood_gsfTrackP was added in trees recently, for older ones set this flag to 1 and p(track) will be derived as LepGood_correctedEcalEnergy[0]/LepGood_eSuperClusterOverP[0]
+#define CUT_HT 200
 #define READ_FROM_LOCAL 0
+#define USE_MC_EXT_SAMPLE 1 // 1 to use ext sample and weight events properly; 0 to skip usage of ext samples, unless the MC is unweighted (the problem with ext is the correct event weighting)
 
 using namespace std;
 
@@ -278,6 +280,30 @@ void setHistColor(vector<Int_t> &histColor, const Int_t nObject) {
   
 }
 
+//========================================================================================
+
+Long64_t Ntot_events_beforeSkim() {
+
+  // associates to each sample (with events_ntot events) the events_ntot for its ext sample)
+  map<Float_t, Float_t> evts_ntot_map;
+  evts_ntot_map[27546978] = 27546978; //100to200 are equal
+  evts_ntot_map[ 4963240] = 14888384; // 200to400 (ext in bracket)
+  evts_ntot_map[14888384] =  4963240; // 200to400
+  evts_ntot_map[ 5469282] =  1963464; // 400to600 (ext in bracket)
+  evts_ntot_map[ 1963464] =  5469282; // 400to600
+  evts_ntot_map[ 3722395] =        0; // 600to800 (no ext available)
+  evts_ntot_map[ 6314257] =  1540477; // 800to1200 (ext in bracket)
+  evts_ntot_map[ 1540477] =  6314257; // 800to1200
+  evts_ntot_map[ 6817172] =   246737; // 1200to2500 (ext in bracket)
+  evts_ntot_map[  246737] =  6817172; // 1200to2500
+  evts_ntot_map[ 1793796] =   253561; // 2500toInf (ext in bracket)
+  evts_ntot_map[  253561] =  1793796; // 2500toInf
+
+  return -1;
+
+}
+
+//=======================================================================================0
 
 void buildChainWithFriend(TChain* chain, TChain* chFriend, string sampleName, TChain* chsfFriend = NULL) {
   
@@ -327,18 +353,18 @@ void buildChainWithFriend(TChain* chain, TChain* chFriend, string sampleName, TC
 	subSampleNameVector.push_back("WJetsToLNu");	
       } else {
 	subSampleNameVector.push_back("WJetsToLNu_HT100to200");
-	if (NO_MC_WEIGHT) subSampleNameVector.push_back("WJetsToLNu_HT100to200_ext");
+	if (NO_MC_WEIGHT || USE_MC_EXT_SAMPLE) subSampleNameVector.push_back("WJetsToLNu_HT100to200_ext");
 	subSampleNameVector.push_back("WJetsToLNu_HT200to400");
-	if (NO_MC_WEIGHT) subSampleNameVector.push_back("WJetsToLNu_HT200to400_ext");
+	if (NO_MC_WEIGHT || USE_MC_EXT_SAMPLE) subSampleNameVector.push_back("WJetsToLNu_HT200to400_ext");
 	subSampleNameVector.push_back("WJetsToLNu_HT400to600");
-	if (NO_MC_WEIGHT) subSampleNameVector.push_back("WJetsToLNu_HT400to600_ext");
+	if (NO_MC_WEIGHT || USE_MC_EXT_SAMPLE) subSampleNameVector.push_back("WJetsToLNu_HT400to600_ext");
 	subSampleNameVector.push_back("WJetsToLNu_HT600to800");
 	subSampleNameVector.push_back("WJetsToLNu_HT800to1200");
-	if (NO_MC_WEIGHT) subSampleNameVector.push_back("WJetsToLNu_HT800to1200_ext");
+	if (NO_MC_WEIGHT || USE_MC_EXT_SAMPLE) subSampleNameVector.push_back("WJetsToLNu_HT800to1200_ext");
 	subSampleNameVector.push_back("WJetsToLNu_HT1200to2500");
-	if (NO_MC_WEIGHT) subSampleNameVector.push_back("WJetsToLNu_HT1200to2500_ext");
+	if (NO_MC_WEIGHT || USE_MC_EXT_SAMPLE) subSampleNameVector.push_back("WJetsToLNu_HT1200to2500_ext");
 	subSampleNameVector.push_back("WJetsToLNu_HT2500toInf");
-	if (NO_MC_WEIGHT) subSampleNameVector.push_back("WJetsToLNu_HT2500toInf_ext");
+	if (NO_MC_WEIGHT || USE_MC_EXT_SAMPLE) subSampleNameVector.push_back("WJetsToLNu_HT2500toInf_ext");
       }
     } else if (SKIM_1LEP1JET_80X) {
       subSampleNameVector.push_back("WJetsToLNu_HT100to200");
@@ -458,6 +484,7 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges
    fChain->SetBranchStatus("nMu10V",1);
    fChain->SetBranchStatus("nGamma15V",1);
    fChain->SetBranchStatus("nBTag15",1);
+   fChain->SetBranchStatus("nTauClean18V",1);
 
    fChain->SetBranchStatus("nEle10V",1);  // # of electrons passing loose selection for electron veto
    fChain->SetBranchStatus("nEle40T",1);
@@ -490,6 +517,7 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges
      fChain->SetBranchStatus("genLep_mass",1);
 
      fChain->SetBranchStatus("weight",1);
+     fChain->SetBranchStatus("events_ntot",1);
      fChain->SetBranchStatus("puw",1);
      fChain->SetBranchStatus("SF_BTag",1);
 
@@ -604,6 +632,22 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges
    Float_t Etrue = 0.0; 
    /////////////////////////
 
+   // to use proper weight when using ext
+   map<Float_t, Float_t> evts_ntot_map; 
+   // events in HT bin --- events in HT bin's twin
+   evts_ntot_map[27546978] = 27546978; //100to200 are equal
+   evts_ntot_map[ 4963240] = 14888384; // 200to400 (ext in bracket)
+   evts_ntot_map[14888384] =  4963240; // 200to400
+   evts_ntot_map[ 5469282] =  1963464; // 400to600 (ext in bracket)
+   evts_ntot_map[ 1963464] =  5469282; // 400to600
+   evts_ntot_map[ 3722395] =        0; // 600to800 (no ext available)
+   evts_ntot_map[ 6314257] =  1540477; // 800to1200 (ext in bracket)
+   evts_ntot_map[ 1540477] =  6314257; // 800to1200
+   evts_ntot_map[ 6817172] =   246737; // 1200to2500 (ext in bracket)
+   evts_ntot_map[  246737] =  6817172; // 1200to2500
+   evts_ntot_map[ 1793796] =   253561; // 2500toInf (ext in bracket)
+   evts_ntot_map[  253561] =  1793796; // 2500toInf
+
    Double_t wgt = 1.0;
    Double_t sumwgt = 0.0;
 
@@ -623,8 +667,8 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges
       if (met_pt < 50) continue;
       if (CUT_HT && htJet40a < CUT_HT) continue;
       if (!( nEle10V == 1 && nEle40T == 1) ) continue;
-      if (!( fabs(LepGood_pdgId[0]) == 11 && LepGood_pt[0] > 40 && fabs(LepGood_eta[0]) < ELE_ETA_MAX) ) continue;
-      if (nMu10V != 0 || nGamma15V != 0 || nBTag15 != 0) continue;
+      if (!( fabs(LepGood_pdgId[0]) == 11 && LepGood_pt[0] > 50 && fabs(LepGood_eta[0]) < ELE_ETA_MAX) ) continue;
+      if (nMu10V != 0 || nGamma15V != 0 || nTauClean18V != 0 || nBTag15 != 0) continue;
 
       Double_t energyToUse = -1.0;
       if (USE_RAWE) energyToUse = LepGood_superCluster_rawEnergy[0];
@@ -643,6 +687,7 @@ void EoverP::Loop(const string sampleName, const vector<Float_t> &energybinEdges
 	  else {
 	    // wgt = LUMI * weight * puw * SF_NLO_QCD * SF_NLO_EWK * SF_trig1lep * SF_LepTight;
 	    wgt = LUMI * weight * puw * SF_NLO_QCD * SF_BTag * SF_NLO_EWK * SF_trig1lep * SF_LepTight;
+	    if (USE_MC_EXT_SAMPLE) wgt *= ( events_ntot / (events_ntot + evts_ntot_map.at(events_ntot)) );
 	    if (!MC_NLO_NOHTBIN) wgt /= 1.21;
 	  }
 	}
@@ -2037,7 +2082,7 @@ Int_t main(Int_t argc, char* argv[]) {
 
   vector<Float_t> energybinEdges;
   // this binning looks ok
-  energybinEdges.push_back(25.0);
+  //energybinEdges.push_back(25.0);
   energybinEdges.push_back(50.0);
   energybinEdges.push_back(75.0);
   energybinEdges.push_back(100.0);
@@ -2048,7 +2093,7 @@ Int_t main(Int_t argc, char* argv[]) {
     energybinEdges.push_back(275.0);
     energybinEdges.push_back(350.0);
     energybinEdges.push_back(450.0);
-    energybinEdges.push_back(650.0);
+    //energybinEdges.push_back(650.0);
     energybinEdges.push_back(900.0);
   } else {
     energybinEdges.push_back(275.0);

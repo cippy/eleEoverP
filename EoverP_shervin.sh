@@ -22,12 +22,13 @@ do
 done
 
 # name of directory where files are stored (can be a single name or a path, they will be created from current directory below)
-outputDirName="plot/2016_singleEleRunBtoG_Eregr_fit2sideCB_weightReco/"  
+outputDirName="plot/test_code_06June2017/"  
 ############################################
 # WARNING  --> outputDirName must end with /
 ########################################### 
 wwwBase="/afs/cern.ch/user/m/mciprian/www/"
 wwwdir="/afs/cern.ch/user/m/mciprian/www/EoverP/"$outputDirName
+PhpToCopy="/afs/cern.ch/user/m/mciprian/www/index.php"
 
 echo "Creating directory to store output files, if not yet existing ..."
 echo "mkdir -p $outputDirName"
@@ -36,11 +37,13 @@ echo "Creating directory to store plots on website, if not yet existing ..."
 echo "mkdir -p $wwwdir"
 mkdir -p $wwwdir
 
-# now must launch script to make plots visible from website
-currentPath="$PWD"
-cd $wwwBase
-./copyphp.sh   # you should already have this script to be able to see files in your website                                                                           
-cd $currentPath
+# # now must launch script to make plots visible from website
+# currentPath="$PWD"
+# cd $wwwBase
+# ./copyphp.sh   # you should already have this script to be able to see files in your website                                                                           
+# cd $currentPath
+cp ${PhpToCopy} ${wwwdir}
+
 
 echo "Now launching executable ..."
 echo "----------------------------"

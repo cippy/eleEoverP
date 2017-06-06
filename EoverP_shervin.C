@@ -57,7 +57,7 @@
 #define USE_RAWE 0 // when 1, use raw SC energy instead of regression corrected ECAL energy
 #define DO_TEMPLATE_FIT 0  // when 0 will not do template fit
 #define READ_FROM_LOCAL 1 // I skimmed and copied Shervin's ntuples. If the selection is the same as or tighter than the skim, better to read the skimmed version
-#define USE_P_AT_VTX 1  // choose p at vtx or mode of p (two variables in Sehrvin's ntuples
+#define USE_P_AT_VTX 0  // choose p at vtx or mode of p (two variables in Sehrvin's ntuples
 #define BIN_P 0 // decide to bin in P or E (or Eraw depending on other defines)
 #define ELE_ETA_MAX 1.0
 
@@ -499,6 +499,7 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
    vector<TH1F*> hEoverP_energyBin(nEnergyBins,NULL);
    vector<TH1F*> hEoverP_gain6and12_energyBin(nEnergyBins,NULL);
    vector<TH1F*> hEoverP_gain12_energyBin(nEnergyBins,NULL);
+   vector<TH1F*> hEoverP_gain1_energyBin(nEnergyBins,NULL);
    // histogram to store the mean energy in a given bin, useful to plot E/P asf of the mean energy in the bin with a TGraph
    TH1F* hMeanEnergyInEnergyBin = new TH1F("hMeanEnergyInEnergyBin","",nEnergyBins,energybinEdges.data());
 
@@ -524,6 +525,7 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
      hEoverP_energyBin[i] = new TH1F(Form("hEoverP_energyBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",200,0.05,2.05);
      hEoverP_gain6and12_energyBin[i] = new TH1F(Form("hEoverP_gain6and12_energyBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",200,0.05,2.05);
      hEoverP_gain12_energyBin[i] = new TH1F(Form("hEoverP_gain12_energyBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",200,0.05,2.05);
+     hEoverP_gain1_energyBin[i] = new TH1F(Form("hEoverP_gain1_energyBin%1.0fTo%1.0f",energybinEdges[i],energybinEdges[i+1]),"",200,0.05,2.05);
    }
 
    if (sampleName != "DATA" && sampleName != "DATA_w") {
@@ -581,8 +583,9 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
       nb = fChain->GetEntry(jentry);   nbytes += nb;
       // if (Cut(ientry) < 0) continue;
 
-      if (jentry%500000 == 0) cout << jentry << endl;
-  
+      //if (jentry%500000 == 0) cout << jentry << endl;
+      if (jentry%50000 == 0) cout<<"\r"<<"Analyzing events "<<double(jentry)/nentries*100<<" % ";
+ 
       if ( otherDataChain != NULL && !(runNumber == runNumber_other && eventNumber == eventNumber_other)) continue;
 
       // if (met_pt < 50) continue;
@@ -647,7 +650,10 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
 	if (gainEle[0] != 2) {
 	  hEoverP_gain6and12_energyBin[bin]->Fill(EoverP_toUse);
 	  if (gainEle[0] != 1) hEoverP_gain12_energyBin[bin]->Fill(EoverP_toUse);
+	} else {
+	  hEoverP_gain1_energyBin[bin]->Fill(EoverP_toUse);
 	}
+
 	//sum the energy to the bin content in the bin it belongs to (at the end we will divide by the number of entries in each bin)
 	// using bin+1 because the histogram bin number goes from 1 to number of bins, while "bin" variable starts from 0
 	hMeanEnergyInEnergyBin->SetBinContent(bin+1, varToUseForBin + hMeanEnergyInEnergyBin->GetBinContent(bin+1));  
@@ -658,6 +664,8 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
 	if (gainEle[0] != 2) {
 	  hEoverP_gain6and12_energyBin[nEnergyBins-1]->Fill(EoverP_toUse);
 	  if (gainEle[0] != 1) hEoverP_gain12_energyBin[nEnergyBins-1]->Fill(EoverP_toUse);
+	} else {
+	  hEoverP_gain1_energyBin[nEnergyBins-1]->Fill(EoverP_toUse);
 	}
 	// however, the mean is done without them, because overflows can be far outlier and bias the mean
 	//hMeanEnergyInEnergyBin->SetBinContent(nEnergyBins, varToUseForBin + hMeanEnergyInEnergyBin->GetBinContent(nEnergyBins));
@@ -668,8 +676,8 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
       finalEntries++;
       if (energyToUse < energybinEdges[0]) entriesWithEnergyLowerThanFirstBin++;
       if (energyToUse > energybinEdges.back()) entriesWithEnergyHigherThanLastBin++;
-      if (energyToUse < energybinEdges[0]) entriesWithPLowerThanFirstBin++;
-      if (energyToUse > energybinEdges.back()) entriesWithPHigherThanLastBin++;
+      if (pToUse < energybinEdges[0]) entriesWithPLowerThanFirstBin++;
+      if (pToUse > energybinEdges.back()) entriesWithPHigherThanLastBin++;
       if (gainEle[0] == 2) entriesWithGain1++;
 
    }  // end of loop on entries
@@ -700,6 +708,20 @@ void EoverP_shervin::Loop(const string sampleName, const vector<Float_t> &energy
      hEoverP_gain6and12_energyBin[i]->GetYaxis()->SetTitle("events");
      hEoverP_gain6and12_energyBin[i]->GetYaxis()->SetTitleSize(0.055);
      hEoverP_gain6and12_energyBin[i]->GetYaxis()->SetTitleOffset(0.8);
+
+     hEoverP_gain12_energyBin[i]->GetXaxis()->SetTitle("E / P");
+     hEoverP_gain12_energyBin[i]->GetXaxis()->SetTitleSize(0.06);
+     hEoverP_gain12_energyBin[i]->GetXaxis()->SetTitleOffset(0.8);
+     hEoverP_gain12_energyBin[i]->GetYaxis()->SetTitle("events");
+     hEoverP_gain12_energyBin[i]->GetYaxis()->SetTitleSize(0.055);
+     hEoverP_gain12_energyBin[i]->GetYaxis()->SetTitleOffset(0.8);
+
+     hEoverP_gain1_energyBin[i]->GetXaxis()->SetTitle("E / P");
+     hEoverP_gain1_energyBin[i]->GetXaxis()->SetTitleSize(0.06);
+     hEoverP_gain1_energyBin[i]->GetXaxis()->SetTitleOffset(0.8);
+     hEoverP_gain1_energyBin[i]->GetYaxis()->SetTitle("events");
+     hEoverP_gain1_energyBin[i]->GetYaxis()->SetTitleSize(0.055);
+     hEoverP_gain1_energyBin[i]->GetYaxis()->SetTitleOffset(0.8);
 
 
      // remember that the last bin is somewhat special, because it holds the overflows
@@ -1247,7 +1269,10 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
   } else if (hNameToTriggerOptions == "gain12") {
     hdata->SetMinimum(0.95);
     hdata->SetMaximum(1.02);
-  }
+  } // else if (hNameToTriggerOptions == "gain1") {
+  //   hdata->SetMinimum(0.95);
+  //   hdata->SetMaximum(1.02);
+  // }
 
 
   if (SET_SCALE_ON_Y) {
@@ -1324,6 +1349,9 @@ void drawPlotDataMC(TH1F* hdata, TH1F* hmc, const string& MCSampleName, const st
   if (hNameToTriggerOptions == "gain12") {
     ratioplotCopy->SetMinimum(0.95);
     ratioplotCopy->SetMaximum(1.05);
+  } else if (hNameToTriggerOptions == "gain1") {
+    ratioplotCopy->SetMinimum(0.85);
+    ratioplotCopy->SetMaximum(1.0);
   }
 
   if( canvasName== "modeEoverPfromFit" ) {
@@ -1687,6 +1715,32 @@ void plotFromFit(const string &dataSampleName, const string &dataWgtSampleName, 
 		   titleForPlotsWithMeanInRange,"gain12");
   }
 
+
+  // study only 1
+  vector<Float_t> energybinEdges_part;
+  energybinEdges_part.push_back(350);
+  energybinEdges_part.push_back(450);
+  energybinEdges_part.push_back(900);
+  Int_t nEnergyBins_part = energybinEdges_part.size() - 1;
+
+  TH1F* hPeakEoverP_gain1_data = new TH1F("hPeakEoverP_gain1_data","",nEnergyBins_part,energybinEdges_part.data());
+  TH1F* hPeakEoverP_gain1_dataWgt = new TH1F("hPeakEoverP_gain1_dataWgt","",nEnergyBins_part,energybinEdges_part.data());
+  TH1F* hPeakEoverP_gain1_data_meanInRange = new TH1F("hPeakEoverPdata_meanInRange","",nEnergyBins_part,energybinEdges_part.data());
+  TH1F* hPeakEoverP_gain1_dataWgt_meanInRange = new TH1F("hPeakEoverPdataWgt_meanInRange","",nEnergyBins_part,energybinEdges_part.data());
+
+  plotDistribution(dataSampleName, energybinEdges_part, hPeakEoverP_gain1_data, NULL, "EoverP",dirName, 
+		   hPeakEoverP_gain1_data_meanInRange,lowRangeValueForMean, upRangeValueForMean, NULL, NULL, "_gain1");
+  plotDistribution(dataWgtSampleName, energybinEdges_part, hPeakEoverP_gain1_dataWgt, NULL, "EoverP",dirName,
+		   hPeakEoverP_gain1_dataWgt_meanInRange,lowRangeValueForMean, upRangeValueForMean, NULL, NULL, "_gain1");
+  drawPlotDataMC(hPeakEoverP_gain1_data, hPeakEoverP_gain1_dataWgt, dataWgtSampleName, 
+		 xAxisName, "peak(E/P) from fit", "modeEoverP_gain1_fromFit",dirName,canvasTitle,"gain1");
+  if ( (hPeakEoverPdata_meanInRange != NULL) && (hPeakEoverPdataWgt_meanInRange != NULL) ) {
+    drawPlotDataMC(hPeakEoverP_gain1_data_meanInRange, hPeakEoverP_gain1_dataWgt_meanInRange, 
+		   dataWgtSampleName, xAxisName, "peak(E/P)", "modeEoverP_gain1_usingMean",dirName,
+		   titleForPlotsWithMeanInRange,"gain1");
+  }
+
+
 }
 
 
@@ -1736,13 +1790,13 @@ Int_t main(Int_t argc, char* argv[]) {
 
   }
 
-  Option* option = new Option();
-  option->Set_data2016(1);
-  option->Set_skim1lep1jet80X(1);
-  option->Set_fit2sideCB(0);
-  option->Set_setScaleOnY(1);
-  option->Set_useE(1);
-  option->Set_dirName(dirName);
+  // Option* option = new Option();
+  // option->Set_data2016(1);
+  // option->Set_skim1lep1jet80X(1);
+  // option->Set_fit2sideCB(0);
+  // option->Set_setScaleOnY(1);
+  // option->Set_useE(1);
+  // option->Set_dirName(dirName);
 
   vector<string> sampleName;
   sampleName.push_back("DATA");
