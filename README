@@ -1,0 +1,44 @@
+EoverP_shervin.C is based on trees made by Shervin with data reconstructed with multifit or weight method. The goal was to compare the results of E/p study on both these data, because the energy scale issue was supposed to be due to multifit
+
+Another version is EoverP.C, which works very similarly but runs on different set of ntuples (with many hardcoded part). Unlike the previous code, this is supposed to run on data (multifit) and WJets MC
+
+In the following we refer to EoverP_shervin.C
+
+//////////////////////////////
+// General overview
+
+Macro depends on an header EoverP_shervin.h produced with MakeClass from trees made by Shervin. The Loop method was changed a little bit to accept some arguments.
+Basically, the code un on ntuples and store plots of E/p distributions or any other interesting distributions in a root file.
+
+This output file is then opened to take plots and draw them (as explained below, it is therefore possible to run just the plotting part if nothing changed in the event selection or any other part in the Loop() method, this saves a lot of time when ntuples are big)
+
+The most interesting plots are the peak of E/p distribution in different bins of electon energy (or transverse energy)
+
+////////////////////////////
+
+Macro was written in 8_0_10 release
+
+The macro is supposed to run on root files here --> /afs/cern.ch/work/m/mciprian/EoverP_study_new/CMSSW_8_0_10/src/eleEoverP/TREES_shervin_skim/
+
+To use EoverP_shervin.C do :
+
+source EoverP_shervin.sh [options]
+
+In EoverP_shervin.sh change:
+outputDirName  --> name of directory where plots are stored (both locally and on website)
+wwwBase and wwwdir --> be consistent with your website folder
+
+Options are:
+-c --> only compile and exit
+-nl --> do not loop on ntuples, just produce plots (if root files with plot already exists). It assumes you already run on ntuples. This saves time
+-np --> do not produce plots, just run on ntuples
+
+Inside EoverP_shervin.C there are some #define, an hardcoded way to get some specific behaviour, the default value are the usual ones:
+FIT_2SIDE_CB : if 1 use a double side crystal ball to fit E/p distribution, otherwise a single CB is used
+USE_E : 1 to use energy, 0 to use transverse energy for the binning (i.e. if you want E/p asaf of E or ET)
+USE_RAWE: 1 to use raw supercluster energy, 0 for regression corrected 1 (read from different variables in Shervin's trees)
+DO_TEMPLATE_FIT: if 1, do a fit on data using a template made from MC distribution. This was used with Emanuele's ntuples, for which we had MC as well, keep 0 unless Shervin has produced a MC and you already run on that (so you have to run on MC and then on data)
+READ_FROM_LOCAL: read root files from local (I had a skimmed version of ntuples in my area, otherwise I had to read the unskimmed version on eos)
+USE_P_AT_VTX: Shervin had 2 definition of electron momentum, p at track vertex or mode of p (roughly a mean between p at vertex and at the end of the track) 
+BIN_P: 1 to do E/p asaf of p, 0 to do E/p asaf of E (second case is the preferred one)
+ELE_ETA_MAX: restrict analysis in eta range, I used eta < 1.0 (central EB)
