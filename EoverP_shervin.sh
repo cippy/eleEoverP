@@ -2,7 +2,7 @@
 
 echo
 echo "Compiling EoverP_shervin.C ..."
-g++ -Wall -pedantic -lm -o EoverP_shervin EoverP_shervin.C $ROOTSYS/bin/root-config --cflags --libs
+g++ -Wall -pedantic -lm -o EoverP_shervin EoverP_shervin.C `$ROOTSYS/bin/root-config --cflags --libs`
 
 if [ $? -ne 0 ]
 then
